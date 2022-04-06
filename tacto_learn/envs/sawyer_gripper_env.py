@@ -61,8 +61,8 @@ class SawyerGripperEnv(gym.Env):
     reward_per_step = -0.01
 
     def __init__(self, config_path=_get_default_config_path()):
-        px.init(mode=p.GUI)
-        # px.init(mode=p.DIRECT)
+        # px.init(mode=p.GUI)
+        px.init(mode=p.DIRECT)
         self.cfg = OmegaConf.load(config_path)
         self.cfg.sawyer_gripper.robot_params.urdf_path = osp.join(osp.dirname(osp.realpath(__file__)), self.cfg.sawyer_gripper.robot_params.urdf_path)
         self.cfg.object.urdf_path = osp.join(osp.dirname(osp.realpath(__file__)), self.cfg.object.urdf_path)
