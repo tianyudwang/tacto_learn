@@ -1,3 +1,6 @@
+import os
+os.environ['PYOPENGL_PLATFORM'] = 'egl'         # Offscreen rendering
+
 import gym
 import torch
 from stable_baselines3 import SAC, PPO
@@ -6,6 +9,7 @@ from stable_baselines3.common.env_util import make_vec_env
 import tacto_learn.envs
 from tacto_learn.envs.wrappers import SawyerActionWrapper, SawyerObservationWrapper
 from tacto_learn.models.feature_extractors import CustomCombinedExtractor
+
 
 def sawyer_wrappers(env):
     return SawyerObservationWrapper(SawyerActionWrapper(env))
@@ -49,7 +53,7 @@ def train_SAC():
         policy_kwargs=policy_kwargs,
         verbose=1
     )
-    model.learn(total_timesteps=400, log_interval=2)
+    model.learn(total_timesteps=100000, log_interval=2)
     model.save("sac_sawyer")   
 
 
