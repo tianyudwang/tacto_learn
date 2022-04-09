@@ -26,7 +26,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
                 if 'depth' in key:
                     input_shape = (1, *subspace.shape)
                 else:
-                    input_shape = subspace.shape
+                    input_shape = (subspace.shape[-1], *subspace.shape[:2])
                 extractors[key] = ImageEncoder(input_shape, img_lat_dim)
                 total_concat_size += img_lat_dim
             # elif "depth" in key:
@@ -46,10 +46,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
         # self.extractors contain nn.Modules that do all the processing.
         for key, extractor in self.extractors.items():
-            if 'depth' in key:
-                x = th.unsqueeze(observations[key], dim=1)  # Bring back channel dim
-            else:
-                x = observations[key]
+            x = observations[key]
             feature = extractor(x)
             encoded_tensor_list.append(feature)
         # Return a (B, self._features_dim) PyTorch tensor, where B is batch dimension.

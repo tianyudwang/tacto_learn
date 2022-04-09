@@ -22,4 +22,4 @@ object:
 tacto:
   width: 30
   height: 40
-  visualize_gui: True
+  visualize_gui: False

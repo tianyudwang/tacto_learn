@@ -91,8 +91,8 @@ class SawyerGripperEnv(gym.Env):
             done (bool): whether the episode has ended. Further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         """
-        done = self._done()
-        reward = self.reward_per_step + int(done)
+        done = False
+        reward = self._get_rew()
         info = {}
 
         self.robot.set_actions(action)
@@ -137,6 +137,13 @@ class SawyerGripperEnv(gym.Env):
                 },
             }
         )
+
+    def _get_rew(self):
+        (x, y, z), _ = self.obj.get_base_pose()
+        # reward = 10 * (z - 0.03)
+        # reward = min(1, reward)
+        reward = self.reward_per_step + int(z > 0.08)
+        return reward
 
     def reset(self):
         self.robot.reset()

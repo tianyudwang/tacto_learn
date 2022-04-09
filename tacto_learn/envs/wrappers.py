@@ -13,8 +13,6 @@ def flatten_dict_space(space, flatten):
         flatten['low'].append(space.low)
         flatten['high'].append(space.high)
 
-def fill_dict_val(action, values):
-    pass
 
 # Merge sawyer action into one 
 class SawyerActionWrapper(gym.ActionWrapper):
@@ -35,10 +33,14 @@ class SawyerActionWrapper(gym.ActionWrapper):
     def action(self, act):
         # Converts numpy action into original dict
         new_act = self.unwrapped_action_space.new()
-        new_act.end_effector.position = act[0:3]
-        new_act.end_effector.orientation = act[3:7]
-        new_act.gripper_width = act[7:8]
-        new_act.gripper_force = act[8:9]
+        if np.linalg.norm(act[0:3]) > 1e-3:
+            new_act.end_effector.position = act[0:3]
+        if np.linalg.norm(act[3:7]) > 1e-3:
+            new_act.end_effector.orientation = act[3:7]
+        if np.linalg.norm(act[7:8]) > 1e-3:
+            new_act.gripper_width = act[7:8]
+        if np.linalg.norm(act[8:9]) > 1e-3:
+            new_act.gripper_force = act[8:9]
         return new_act
 
 # Convert nested dict into flatten dict
@@ -59,7 +61,7 @@ class SawyerObservationWrapper(gym.ObservationWrapper):
             'robot_end_effector_orientation': self.unwrapped_observation_space['robot']['end_effector']['orientation'],
             'robot_gripper_width': self.unwrapped_observation_space['robot']['gripper_width'],
             'object_position': self.unwrapped_observation_space['object']['position'],
-            'object_orientiation': self.unwrapped_observation_space['object']['orientation'],
+            'object_orientation': self.unwrapped_observation_space['object']['orientation'],
         }
         
         self.observation_space = gym.spaces.Dict(observation_space)
@@ -77,6 +79,6 @@ class SawyerObservationWrapper(gym.ObservationWrapper):
             'robot_end_effector_orientation': obs['robot']['end_effector']['orientation'],
             'robot_gripper_width': obs['robot']['gripper_width'],
             'object_position': obs['object']['position'],
-            'object_orientiation': obs['object']['orientation']
+            'object_orientation': obs['object']['orientation']
         }
         return new_obs

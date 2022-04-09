@@ -4,51 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 import numpy as np 
-import torch
+
 import gym
 import tacto_learn.envs
 
 np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
-
-class GraspingPolicy(torch.nn.Module):
-    def __init__(self, env):
-        super().__init__()
-        self.env = env
-        self.t = 0
-
-    def forward(self, states=None):
-        action = self.env.action_space.new()
-        if not states:
-            return action
-
-        z_low, z_high = 0.05, 0.4
-        dz = 0.02
-        w_open, w_close = 0.11, 0.05
-        gripper_force = 20
-
-        if self.t < 50:
-            action.end_effector.position = states.object.position + [0, 0, z_high]
-            action.end_effector.orientation = [0.0, 1, 0.0, 0.0]
-            action.gripper_width = w_open
-        elif self.t < 100:
-            s = (self.t - 50) / 50
-            z = z_high - s * (z_high - z_low)
-            action.end_effector.position = states.object.position + [0, 0, z]
-        elif self.t < 150:
-            action.gripper_width = w_close
-            action.gripper_force = gripper_force
-        elif self.t < 220:
-            delta = [0, 0, dz]
-            action.end_effector.position = states.robot.end_effector.position + delta
-            action.gripper_width = w_close
-            action.gripper_force = gripper_force
-        else:
-            action.gripper_width = w_close
-
-        self.t += 1
-
-        return action
-
 
 def main():
 
@@ -68,7 +28,6 @@ def main():
         obs, reward, done, info = env.step(action)
         print(obs['object']['position'], done)
 
-    env.close()
 
 
 if __name__ == "__main__":

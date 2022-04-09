@@ -35,16 +35,16 @@ class ImageEncoder(nn.Module):
         Image encoder taken from Making Sense of Vision and Touch
         """
         super().__init__()
+        assert len(input_shape) == 3 and input_shape[0] <= 4, f"Requires channel-first input shape but got {input_shape}"
         self.input_shape = input_shape      # channel-first
         self.out_dim = out_dim
-        self.device = th.device('cuda')
 
-        img_conv1 = conv2d(self.input_shape[0], 16, kernel_size=7, stride=2)
-        img_conv2 = conv2d(16, 32, kernel_size=5, stride=2)
-        img_conv3 = conv2d(32, 64, kernel_size=5, stride=2)
-        img_conv4 = conv2d(64, 64, kernel_size=3, stride=2)
-        img_conv5 = conv2d(64, 128, stride=2)
-        img_conv6 = conv2d(128, self.out_dim, stride=2)
+        img_conv1 = conv2d(self.input_shape[0], 8, kernel_size=7, stride=2)
+        img_conv2 = conv2d(8, 16, kernel_size=5, stride=2)
+        img_conv3 = conv2d(16, 32, kernel_size=5, stride=2)
+        # img_conv4 = conv2d(64, 64, kernel_size=3, stride=2)
+        # img_conv5 = conv2d(64, 128, stride=2)
+        # img_conv6 = conv2d(128, self.out_dim, stride=2)
         self.img_conv = nn.Sequential(
             img_conv1,
             img_conv2,
@@ -68,8 +68,6 @@ class ImageEncoder(nn.Module):
         return np.prod(x.shape)
 
     def forward(self, image):
-        if image.dim() == 3:
-            image = th.unsqueeze(image, dim=0) 
 
         # image encoding layers
         x = self.img_conv(image)
