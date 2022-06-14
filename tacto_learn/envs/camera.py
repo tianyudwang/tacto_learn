@@ -42,6 +42,7 @@ class Camera:
             shadow=1,
             lightDirection=[1, 1, 1],
             renderer=p.ER_BULLET_HARDWARE_OPENGL,
+            # renderer=p.ER_TINY_RENDERER
         )
 
         rgb = img_arr[2]  # color image RGB H x W x 3 (uint8)

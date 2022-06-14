@@ -64,20 +64,107 @@ class SawyerObservationWrapper(gym.ObservationWrapper):
             'object_orientation': self.unwrapped_observation_space['object']['orientation'],
         }
         
+        
         self.observation_space = gym.spaces.Dict(observation_space)
 
     def observation(self, obs):
         # modify obs
         new_obs = {
-            'camera_color': obs['camera']['color'],
+            'camera_color': obs['camera']['color']/255,
             'camera_depth': obs['camera']['depth'],
+            'digits_color_0': obs['digits'][0]['color']/255,
+            'digits_depth_0': obs['digits'][0]['depth'],
+            'digits_color_1': obs['digits'][1]['color']/255,
+            'digits_depth_1': obs['digits'][1]['depth'],
+            'robot_end_effector_position': obs['robot']['end_effector']['position'],
+            'robot_end_effector_orientation': obs['robot']['end_effector']['orientation'],
+            'robot_gripper_width': obs['robot']['gripper_width'].reshape(1),
+            'object_position': obs['object']['position'],
+            'object_orientation': obs['object']['orientation']
+        }
+        return new_obs
+
+
+class SawyerStateObservationWrapper(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        
+        self.unwrapped_observation_space = self.unwrapped.observation_space
+
+        observation_space = {
+            # 'camera_color': self.unwrapped_observation_space['camera']['color'],
+            # 'camera_depth': self.unwrapped_observation_space['camera']['depth'],
+            'digits_color_0': self.unwrapped_observation_space['digits'][0]['color'],
+            'digits_depth_0': self.unwrapped_observation_space['digits'][0]['depth'],
+            'digits_color_1': self.unwrapped_observation_space['digits'][1]['color'],
+            'digits_depth_1': self.unwrapped_observation_space['digits'][1]['depth'],
+            'robot_end_effector_position': self.unwrapped_observation_space['robot']['end_effector']['position'],
+            'robot_end_effector_orientation': self.unwrapped_observation_space['robot']['end_effector']['orientation'],
+            'robot_gripper_width': self.unwrapped_observation_space['robot']['gripper_width'],
+            'object_position': self.unwrapped_observation_space['object']['position'],
+            'object_orientation': self.unwrapped_observation_space['object']['orientation'],
+        }
+        
+        self.observation_space = gym.spaces.Dict(observation_space)
+
+    def observation(self, obs):
+        # modify obs
+        new_obs = {
+            # 'camera_color': obs['camera']['color'],
+            # 'camera_depth': obs['camera']['depth'],
             'digits_color_0': obs['digits'][0]['color'],
             'digits_depth_0': obs['digits'][0]['depth'],
             'digits_color_1': obs['digits'][1]['color'],
             'digits_depth_1': obs['digits'][1]['depth'],
             'robot_end_effector_position': obs['robot']['end_effector']['position'],
             'robot_end_effector_orientation': obs['robot']['end_effector']['orientation'],
-            'robot_gripper_width': obs['robot']['gripper_width'],
+            'robot_gripper_width': obs['robot']['gripper_width'].reshape(1),
+            'object_position': obs['object']['position'],
+            'object_orientation': obs['object']['orientation']
+        }
+        return new_obs
+
+def get_tactile(x):
+    return(np.average(x[0]['depth'])*200,np.average(x[1]['depth'])*200)
+
+class SawyerVecStateObservationWrapper(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        
+        self.unwrapped_observation_space = self.unwrapped.observation_space
+
+        observation_space = {
+            # 'camera_color': self.unwrapped_observation_space['camera']['color'],
+            # 'camera_depth': self.unwrapped_observation_space['camera']['depth'],
+            # 'digits_color_0': self.unwrapped_observation_space['digits'][0]['color'],
+            # 'digits_depth_0': self.unwrapped_observation_space['digits'][0]['depth'],
+            'digit': gym.spaces.Box(low=np.array([0,0]),high=np.array([0,0])),
+            # 'digit_0': self.unwrapped_observation_space['digits'][0]['depth'],
+            # 'digits_color_1': self.unwrapped_observation_space['digits'][1]['color'],
+            # 'digits_depth_1': self.unwrapped_observation_space['digits'][1]['depth'],
+            'robot_end_effector_position': self.unwrapped_observation_space['robot']['end_effector']['position'],
+            'robot_end_effector_orientation': self.unwrapped_observation_space['robot']['end_effector']['orientation'],
+            'robot_gripper_width': self.unwrapped_observation_space['robot']['gripper_width'],
+            'object_position': self.unwrapped_observation_space['object']['position'],
+            'object_orientation': self.unwrapped_observation_space['object']['orientation'],
+        }
+        
+        self.observation_space = gym.spaces.Dict(observation_space)
+
+    def observation(self, obs):
+        # modify obs
+        x = get_tactile(obs['digits'])
+        new_obs = {
+            # 'camera_color': obs['camera']['color'],
+            # 'camera_depth': obs['camera']['depth'],
+            # 'digits_color_0': obs['digits'][0]['color'],
+            # 'digits_depth_0': obs['digits'][0]['depth'],
+            # 'digits_color_1': obs['digits'][1]['color'],
+            # 'digits_depth_1': obs['digits'][1]['depth'],
+            'digit': x,
+            'robot_end_effector_position': obs['robot']['end_effector']['position'],
+            'robot_end_effector_orientation': obs['robot']['end_effector']['orientation'],
+            'robot_gripper_width': obs['robot']['gripper_width'].reshape(1),
             'object_position': obs['object']['position'],
             'object_orientation': obs['object']['orientation']
         }

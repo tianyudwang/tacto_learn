@@ -99,7 +99,9 @@ class SawyerGripperEnv(gym.Env):
         self.robot.set_actions(action)
 
         p.stepSimulation()
-
+        # done = self._done()
+        # if done:
+        #     reward += 100   
         self.obs = self._get_obs()
 
         return self.obs, reward, done, info
@@ -109,14 +111,21 @@ class SawyerGripperEnv(gym.Env):
         velocity, angular_velocity = self.obj.get_base_velocity()
         velocity = np.linalg.norm(velocity)
         angular_velocity = np.linalg.norm(angular_velocity)
+        # obj_pose, obj_ori = self.obj.get_base_pose()
+        # (x, y, z) = obj_pose
+        # end_eff_pose = self.robot.get_states()["end_effector"]["position"]
+        # end_eff_ori = self.robot.get_states()["end_effector"]["orientation"]
+        # dist = np.linalg.norm(obj_pose-end_eff_pose)
 
         _log.debug(
             f"obj.z: {z}, obj.velocity: {velocity:.4f}, obj.angular_velocity: {angular_velocity:.4f}"
         )
-        return z > 0.1 and velocity < 0.025 and angular_velocity < 0.025
+        # return bool(dist<0.2)and velocity < 0.025 and angular_velocity < 0.025
+        # return bool(z > 0.1) #and velocity < 0.025 and angular_velocity < 0.025
+
 
     def _get_obs(self):
-        cam_color, cam_depth = self.camera.get_image()
+        # cam_color, cam_depth = self.camera.get_image()
 
         # update objects positions registered with digits
         self.digits.update()
@@ -126,7 +135,7 @@ class SawyerGripperEnv(gym.Env):
 
         return AttrMap(
             {
-                "camera": {"color": cam_color, "depth": cam_depth},
+                # "camera": {"color": cam_color, "depth": cam_depth},
                 "digits": [
                     {"color": color, "depth": depth}
                     for color, depth in zip(colors, depths)
@@ -140,11 +149,18 @@ class SawyerGripperEnv(gym.Env):
         )
 
     def _get_rew(self):
-        (x, y, z), _ = self.obj.get_base_pose()
-        # reward = 10 * (z - 0.03)
-        # reward = min(1, reward)
-        reward = self.reward_per_step + int(z > 0.08)
-        return reward
+        obj_pose, obj_ori = self.obj.get_base_pose()
+        (x, y, z) = obj_pose
+        end_eff_pose = self.robot.get_states()["end_effector"]["position"]
+        end_eff_ori = self.robot.get_states()["end_effector"]["orientation"]
+        dist = np.linalg.norm(obj_pose-end_eff_pose)
+        
+        reward_reaching = 1- np.tanh(10*dist)
+        # print(dist,reward_reaching)
+
+        # reward = reward_reaching #self.reward_per_step + int(z > 0.08) + 
+        reward = reward_reaching + abs(z-0.15) 
+        return reward/1.15
 
     def reset(self):
         self.robot.reset()
@@ -166,8 +182,8 @@ class SawyerGripperEnv(gym.Env):
             return ((depth - min_) / (max_ - min_) * 255).astype(np.uint8)
 
         img = np.concatenate([digit.color for digit in self.obs.digits], axis=1)
-        # cv2.imshow("img", img)
-        # cv2.waitKey(1)
+        cv2.imshow("img", img)
+        cv2.waitKey(1)
 
     def close(self):
         pass
@@ -201,7 +217,7 @@ class SawyerGripperEnv(gym.Env):
         """
         return px.utils.SpaceDict(
             {
-                "camera": convert_obs_to_obs_space(self.obs.camera),
+                # "camera": convert_obs_to_obs_space(self.obs.camera),
                 "digits": convert_obs_to_obs_space(self.obs.digits),
                 "robot": self.robot.state_space,
                 "object": {
