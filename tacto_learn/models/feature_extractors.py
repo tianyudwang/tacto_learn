@@ -49,7 +49,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         # self.extractors contain nn.Modules that do all the processing.
         for key, extractor in self.extractors.items():
             x = observations[key]
-            if 'depth' in key:
+            if 'depth' in key and len(x.shape) != 4:
                 x = x.unsqueeze(dim=1)
             feature = extractor(x)
             encoded_tensor_list.append(feature)

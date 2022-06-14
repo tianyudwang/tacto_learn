@@ -9,7 +9,7 @@ def convert_observation_dict(obs: List[Dict[str, np.ndarray]]):
     keys = obs[0].keys()
     for key in keys:
         new_obs[key] = np.stack([ob[key] for ob in obs], axis=0)
-        if 'depth' in key or 'gripper_width' in key:
+        if 'depth' in key :
             new_obs[key] = new_obs[key][..., np.newaxis]
     return new_obs
 

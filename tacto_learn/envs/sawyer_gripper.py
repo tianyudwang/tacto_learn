@@ -36,7 +36,7 @@ def _vectorize(s):
 
 
 class SawyerGripper(px.Robot):
-    end_effector_name = "right_hand"
+    end_effector_name = "arm_gripper_joint"#"right_hand"
     gripper_names = [
         "base_joint_gripper_left",
         "base_joint_gripper_right",

@@ -61,6 +61,21 @@ class GraspingPolicy(BasePolicy):
         self.t += 1
         return action
 
+class GraspingPolicy2(BasePolicy):
+    """Policy from trained agent"""
+    def __init__(self, env,model):
+        super().__init__(env)
+        self.model = model
+
+    def reset(self):
+        pass
+
+    def predict(self, ob):
+        action = np.zeros(self.env.action_space.shape)
+        action, _ = self.model.predict(ob)
+
+        return action
+
 # class MultiModalPolicy(BasePolicy):
 #     def __init__(self, env):
 #         super().__init__(env)
@@ -131,18 +146,21 @@ class MultiModalPolicy(policies.ActorCriticPolicy):
     ) -> np.ndarray:
         new_observation = {}
         for mode, val in observation.items():
-            if isinstance(val, float):
-                val = np.array([val]).reshape(1,1)
-            else:
-                val = val[None, ...]
+            # if isinstance(val, float):
+            #     val = np.array([val]).reshape(1,1)
+            # else:
+            val = val[None, ...]
             val = ptu.from_numpy(val)
             if 'color' in mode:
                 val = val.permute(0,3,1,2)
-            elif 'depth' in mode:
+            elif 'depth' in mode and len(val.shape) == 4:
                 val = val.unsqueeze(dim=1)
+            # elif 'gripper_width' in mode:
+            #     val = th.reshape(val,1)
             new_observation[mode] = val
 
         with th.no_grad():
+            # print(new_observation['robot_gripper_width'].shape)
             actions = self._predict(new_observation, deterministic=deterministic)
 
         actions = np.squeeze(ptu.to_numpy(actions))

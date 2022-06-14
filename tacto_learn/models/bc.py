@@ -25,8 +25,9 @@ class BC:
         self.replay_buffer = ReplayBuffer()
 
         # self.batch_size = 1
-        self.logger = configure('/tmp/tacto_BC/', ["tensorboard"])
-
+        # self.logger = configure('/tmp/tacto_BC/', ["tensorboard"])
+        self.logger = configure('/home/siddhant/tacto_ws/tensorboard_logs/BC/full_obs/test', ["tensorboard"])
+        
         # policy_cfg = None
         self.policy = MultiModalPolicy(
             observation_space=self.env.observation_space,
@@ -42,7 +43,7 @@ class BC:
         self.ent_weight = 1e-3
 
     def train(self):
-        demonstrations = utils.collect_trajectories(self.env, self.expert_policy, 128)
+        demonstrations = utils.collect_trajectories(self.env, self.expert_policy, 3)
         returns = [np.sum(traj.rewards) for traj in demonstrations]
         print(f"Demonstration return {np.mean(returns):.2f} +/- {np.std(returns):.2f}")
         self.replay_buffer.add_rollouts(demonstrations)
@@ -55,7 +56,7 @@ class BC:
             self.logger.dump(i)
 
     def evaluate(self):
-        trajectories = utils.collect_trajectories(self.env, self.policy, 16)
+        trajectories = utils.collect_trajectories(self.env, self.policy, 2)
         returns = [np.sum(traj.rewards) for traj in trajectories]
         # lengths = [len(traj) for traj in trajectories]
 
