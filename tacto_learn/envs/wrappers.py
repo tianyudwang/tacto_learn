@@ -125,12 +125,12 @@ class SawyerStateObservationWrapper(gym.ObservationWrapper):
         return new_obs
 
 def get_tactile(x):
-    return(np.average(x[0]['depth'])*200,np.average(x[1]['depth'])*200)
+    return(min(np.average(x[0]['depth'])*250,1),min(np.average(x[1]['depth'])*250,1))
 
 class SawyerVecStateObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
-        
+
         self.unwrapped_observation_space = self.unwrapped.observation_space
 
         observation_space = {

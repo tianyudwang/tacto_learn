@@ -76,6 +76,7 @@ class SawyerGripperEnv(gym.Env):
         self.digits.add_camera(self.robot.id, self.robot.digit_links)
 
         self.digits.add_body(self.obj)
+        self.digit_data = None
 
         self.reset()
 
@@ -130,6 +131,7 @@ class SawyerGripperEnv(gym.Env):
         # update objects positions registered with digits
         self.digits.update()
         colors, depths = self.digits.render()
+        self.digit_data = depths
 
         obj_pose = self.obj.get_base_pose()
 
@@ -157,10 +159,11 @@ class SawyerGripperEnv(gym.Env):
         
         reward_reaching = 1- np.tanh(10*dist)
         # print(dist,reward_reaching)
+        reward_reaching += (min(np.average(self.digit_data[0])*250,1)+ min(np.average(self.digit_data[1])*250,1))/2
 
         # reward = reward_reaching #self.reward_per_step + int(z > 0.08) + 
         reward = reward_reaching + abs(z-0.15) 
-        return reward/1.15
+        return reward/2.15
 
     def reset(self):
         self.robot.reset()
