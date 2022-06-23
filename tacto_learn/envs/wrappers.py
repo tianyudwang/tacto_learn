@@ -138,7 +138,7 @@ class SawyerVecStateObservationWrapper(gym.ObservationWrapper):
             # 'camera_depth': self.unwrapped_observation_space['camera']['depth'],
             # 'digits_color_0': self.unwrapped_observation_space['digits'][0]['color'],
             # 'digits_depth_0': self.unwrapped_observation_space['digits'][0]['depth'],
-            'digit': gym.spaces.Box(low=np.array([0,0]),high=np.array([0,0])),
+            'digit': gym.spaces.Box(low=np.array([0,0]),high=np.array([1,1])),
             # 'digit_0': self.unwrapped_observation_space['digits'][0]['depth'],
             # 'digits_color_1': self.unwrapped_observation_space['digits'][1]['color'],
             # 'digits_depth_1': self.unwrapped_observation_space['digits'][1]['depth'],
