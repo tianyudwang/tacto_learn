@@ -5,15 +5,16 @@ from ruamel.yaml import YAML
 
 import robosuite as suite
 from stable_baselines3 import SAC 
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from tacto_learn.utils.wrappers import GymWrapper
 from tacto_learn.utils.extractors import DictExtractor
 
-def make_env(env_cfg):
+def make_env(env_cfg=None):
     controller_configs = suite.load_controller_config(
         default_controller=env_cfg['controller_configs']['default_controller']
     )
-    print(env_cfg)
     env_cfg['controller_configs'] = controller_configs
     env = suite.make(**env_cfg)
     env = GymWrapper(env)
@@ -73,7 +74,14 @@ def main():
         cfg['seed'] = args.seed
 
     # make env
-    env = make_env(cfg['env'])
+    env = make_vec_env(
+        make_env, 
+        env_kwargs=dict(env_cfg=cfg['env']), 
+        vec_env_cls=SubprocVecEnv, 
+        n_envs=8
+    )
+    # env = SubprocVecEnv([make_env(cfg['env']) for])
+    # env = make_env(cfg['env'])
 
     # train policy
     policy = train_policy(env, cfg['policy'])
