@@ -1,4 +1,6 @@
 numpy >= 1.18.5
-pybullet >= 2.8.1
-tacto >= 0.0.3
+ruamel.yaml
+tensorboard
+h5py
 stable_baselines3 >= 1.5.0
+

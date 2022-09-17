@@ -1,0 +1,17 @@
+env:
+  env_name: Lift
+  robots: Panda
+  reward_shaping: True
+  has_offscreen_renderer: True
+  use_camera_obs: True
+  camera_heights: 84
+  camera_widths: 84
+  use_contact_obs: True
+  use_pressure_obs: True
+  controller_configs:
+    default_controller: OSC_POSE
+policy:
+  policy_name: SAC
+  total_timesteps: 6000000
+  buffer_size: 100000
+
