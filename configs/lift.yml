@@ -3,7 +3,7 @@ env:
   robots: Panda
   reward_shaping: True
   has_offscreen_renderer: True
-  use_camera_obs: True
+  use_camera_obs: False
   camera_heights: 84
   camera_widths: 84
   use_contact_obs: True
@@ -14,4 +14,9 @@ policy:
   policy_name: SAC
   total_timesteps: 6000000
   buffer_size: 100000
+  features_extractor:
+    image_feature_dim: 128
+    vector_feature_dim: 32
+
+
 

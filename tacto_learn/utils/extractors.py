@@ -23,6 +23,7 @@ class CNN(nn.Module):
         layers.append(nn.Flatten())
 
         self.convs = nn.Sequential(*layers)
+        # Assumes input image is 84x84
         self.fc = nn.Linear(num_filters*39*39, self.feature_dim)
 
     def forward(self, x):
@@ -32,7 +33,12 @@ class CNN(nn.Module):
 
 
 class DictExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: gym.spaces.Dict):
+    def __init__(
+        self, 
+        observation_space: gym.spaces.Dict, 
+        image_feature_dim: int,
+        vector_feature_dim: int
+    ):
         # We do not know features-dim here before going over all the items,
         # so put something dummy for now. PyTorch requires calling
         # nn.Module.__init__ before adding modules
@@ -45,17 +51,17 @@ class DictExtractor(BaseFeaturesExtractor):
         # so go over all the spaces and compute output feature sizes
         for key, subspace in observation_space.spaces.items():
             if key == "agentview_image":
-                # We will just downsample one channel of the image by 4x4 and flatten.
-                # Assume the image is single-channel (subspace.shape[0] == 0)
-                extractors[key] = CNN(observation_space[key].shape, feature_dim=128)
-                total_concat_size += 128
+                extractors[key] = CNN(observation_space[key].shape, feature_dim=image_feature_dim)
+                total_concat_size += image_feature_dim
             else:
                 # Run through a simple MLP
                 extractors[key] = nn.Sequential(
-                    nn.Linear(subspace.shape[0], 32),
+                    nn.Linear(subspace.shape[0], vector_feature_dim),
                     nn.ReLU(),
+                    nn.Linear(vector_feature_dim, vector_feature_dim),
+                    nn.ReLU(),                
                 )
-                total_concat_size += 32
+                total_concat_size += vector_feature_dim
 
         self.extractors = nn.ModuleDict(extractors)
 

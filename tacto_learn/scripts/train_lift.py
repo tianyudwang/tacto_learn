@@ -31,6 +31,7 @@ def train_policy(env, policy_cfg, exp_name):
 
     policy_kwargs = dict(
         features_extractor_class=DictExtractor,
+        features_extractor_kwargs=policy_cfg['features_extractor'],
     )
 
     policy_path = osp.abspath(osp.join(osp.dirname(osp.realpath(__file__)), '../../trained_models'))
