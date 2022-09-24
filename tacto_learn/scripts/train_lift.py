@@ -9,6 +9,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from tacto_learn.utils.wrappers import GymWrapper
+# from robosuite.wrappers import GymWrapper
 from tacto_learn.utils.extractors import DictExtractor
 
 def make_env(env_cfg=None):

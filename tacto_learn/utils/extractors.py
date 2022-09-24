@@ -1,3 +1,5 @@
+from typing import Optional
+
 import gym
 import torch as th
 from torch import nn
@@ -36,8 +38,11 @@ class DictExtractor(BaseFeaturesExtractor):
     def __init__(
         self, 
         observation_space: gym.spaces.Dict, 
-        image_feature_dim: int,
-        vector_feature_dim: int
+        image_feature_dim: Optional[int] = -1,
+        proprio_feature_dim: Optional[int] = -1,
+        object_feature_dim: Optional[int] = -1,
+        touch_feature_dim: Optional[int] = -1,
+        hidden_dim: Optional[int] = 256,
     ):
         # We do not know features-dim here before going over all the items,
         # so put something dummy for now. PyTorch requires calling
@@ -55,13 +60,21 @@ class DictExtractor(BaseFeaturesExtractor):
                 total_concat_size += image_feature_dim
             else:
                 # Run through a simple MLP
+                if "proprio" in key:
+                    feature_dim = proprio_feature_dim               
+                elif "touch" in key:
+                    feature_dim = touch_feature_dim
+                elif "object" in key:
+                    feature_dim = object_feature_dim
+                assert feature_dim > 0, f"Feature dimension should be provided for observation {key}"
+
                 extractors[key] = nn.Sequential(
-                    nn.Linear(subspace.shape[0], vector_feature_dim),
+                    nn.Linear(subspace.shape[0], hidden_dim),
                     nn.ReLU(),
-                    nn.Linear(vector_feature_dim, vector_feature_dim),
+                    nn.Linear(hidden_dim, feature_dim),
                     nn.ReLU(),                
                 )
-                total_concat_size += vector_feature_dim
+                total_concat_size += feature_dim
 
         self.extractors = nn.ModuleDict(extractors)
 
