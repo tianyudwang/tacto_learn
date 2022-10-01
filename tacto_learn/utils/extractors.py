@@ -11,7 +11,7 @@ class CNN(nn.Module):
         super().__init__()
 
         assert len(obs_shape) == 3
-        assert obs_shape[0] == 3, "Require channel first"
+        assert obs_shape[0] == 3 or obs_shape[0] == 2, f"Require channel first, obs_shape {obs_shape}"
 
         self.feature_dim = feature_dim
 
@@ -32,6 +32,7 @@ class CNN(nn.Module):
         x = self.convs(x)
         x = self.fc(x)
         return x
+
 
 
 class DictExtractor(BaseFeaturesExtractor):
@@ -55,7 +56,7 @@ class DictExtractor(BaseFeaturesExtractor):
         # We need to know size of the output of this extractor,
         # so go over all the spaces and compute output feature sizes
         for key, subspace in observation_space.spaces.items():
-            if key == "agentview_image":
+            if "image" in key or "tactile_depth" in key:
                 extractors[key] = CNN(observation_space[key].shape, feature_dim=image_feature_dim)
                 total_concat_size += image_feature_dim
             else:

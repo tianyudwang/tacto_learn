@@ -173,6 +173,8 @@ class GymWrapper(Wrapper, Env):
                 keys += [f"{cam_name}_image" for cam_name in self.env.camera_names]
             if self.env.use_touch_obs:
                 keys += ["robot0_touch-state"]
+            if self.env.use_tactile_obs:
+                keys += ["robot0_tactile_depth-state"]
             # Iterate over all robots to add to state
             for idx in range(len(self.env.robots)):
                 keys += ["robot{}_proprio-state".format(idx)]
@@ -188,6 +190,11 @@ class GymWrapper(Wrapper, Env):
 
         space_dict = {}
         for k, v in self.modality_dims.items():
+
+            # channel first
+            if "image" in k or "tactile_depth" in k:
+                v = (v[2], v[0], v[1])
+
             if "image" in k:    
                 space_dict[k] = spaces.Box(
                     low=0,
@@ -220,7 +227,11 @@ class GymWrapper(Wrapper, Env):
         new_obs_dict = {}
         for k in self.keys:
             if k in obs_dict:
-                new_obs_dict[k] = obs_dict[k]
+                if "image" in k or "tactile_depth" in k:
+                    img = obs_dict[k]
+                    new_obs_dict[k] = img.transpose(2, 0, 1)
+                else:
+                    new_obs_dict[k] = obs_dict[k]
         return new_obs_dict
 
     def reset(self):

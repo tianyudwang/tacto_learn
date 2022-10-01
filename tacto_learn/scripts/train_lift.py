@@ -6,7 +6,7 @@ from ruamel.yaml import YAML
 import robosuite as suite
 from stable_baselines3 import SAC 
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
 from tacto_learn.utils.wrappers import GymWrapper
 # from robosuite.wrappers import GymWrapper
@@ -42,11 +42,12 @@ def train_policy(env, policy_cfg, exp_name):
         policy_cls = SAC
     else:
         assert False, f"{policy_cfg['policy_name']} not implemented"
+
     policy = policy_cls(
         'MultiInputPolicy', 
         env,
         buffer_size=policy_cfg['buffer_size'], 
-        gradient_steps=-1,
+        gradient_steps=1,
         policy_kwargs=policy_kwargs,
     )
 
@@ -99,13 +100,17 @@ def main():
     ]
     exp_name = '_'.join(exp_name_args)
 
+    if policy_cfg.get("suffix", None):
+        exp_name += "_" + policy_cfg["suffix"]
+
     # make env
-    env = make_vec_env(
-        make_env, 
-        env_kwargs=dict(env_cfg=env_cfg), 
-        vec_env_cls=SubprocVecEnv, 
-        n_envs=8
-    )
+    # env = make_vec_env(
+    #     make_env, 
+    #     env_kwargs=dict(env_cfg=env_cfg), 
+    #     vec_env_cls=SubprocVecEnv, 
+    #     n_envs=8
+    # )
+    env = make_env(env_cfg)
 
     # train policy
     policy = train_policy(env, policy_cfg, exp_name)
