@@ -30,9 +30,11 @@ def make_env(env_cfg=None):
 
 def train_policy(env, policy_cfg, exp_name):
 
+    # Feature extractors should not be shared between actor and critic
     policy_kwargs = dict(
         features_extractor_class=DictExtractor,
         features_extractor_kwargs=policy_cfg['features_extractor'],
+        share_features_extractor=False,
     )
 
     policy_path = osp.abspath(osp.join(osp.dirname(osp.realpath(__file__)), '../../trained_models'))
@@ -104,13 +106,13 @@ def main():
         exp_name += "_" + policy_cfg["suffix"]
 
     # make env
-    # env = make_vec_env(
-    #     make_env, 
-    #     env_kwargs=dict(env_cfg=env_cfg), 
-    #     vec_env_cls=SubprocVecEnv, 
-    #     n_envs=8
-    # )
-    env = make_env(env_cfg)
+    env = make_vec_env(
+        make_env, 
+        env_kwargs=dict(env_cfg=env_cfg), 
+        vec_env_cls=SubprocVecEnv, 
+        n_envs=8
+    )
+    # env = make_env(env_cfg)
 
     # train policy
     policy = train_policy(env, policy_cfg, exp_name)

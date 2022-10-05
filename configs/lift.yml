@@ -16,7 +16,7 @@ policy:
   features_extractor:
     object_feature_dim: 64
     proprio_feature_dim: 64
-    touch_feature_dim: 32
+  suffix: no_share_feat_extr
 
 
 

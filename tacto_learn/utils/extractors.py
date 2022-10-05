@@ -1,6 +1,7 @@
 from typing import Optional
 
 import gym
+import numpy as np
 import torch as th
 from torch import nn
 
@@ -12,8 +13,7 @@ class CNN(nn.Module):
 
         assert len(obs_shape) == 3
         assert obs_shape[0] == 3 or obs_shape[0] == 2, f"Require channel first, obs_shape {obs_shape}"
-
-        self.feature_dim = feature_dim
+        self.obs_shape = obs_shape
 
         layers = [
             nn.Conv2d(obs_shape[0], num_filters, 3, stride=2),
@@ -25,8 +25,13 @@ class CNN(nn.Module):
         layers.append(nn.Flatten())
 
         self.convs = nn.Sequential(*layers)
-        # Assumes input image is 84x84
-        self.fc = nn.Linear(num_filters*39*39, self.feature_dim)
+
+        out_shape = self._compute_conv_out_shape()
+        self.fc = nn.Linear(np.prod(out_shape), feature_dim)
+
+    def _compute_conv_out_shape(self):
+        x = th.rand((1,) + self.obs_shape)
+        return self.convs(x).shape
 
     def forward(self, x):
         x = self.convs(x)
@@ -57,7 +62,7 @@ class DictExtractor(BaseFeaturesExtractor):
         # so go over all the spaces and compute output feature sizes
         for key, subspace in observation_space.spaces.items():
             if "image" in key or "tactile_depth" in key:
-                extractors[key] = CNN(observation_space[key].shape, feature_dim=image_feature_dim)
+                extractors[key] = CNN(observation_space[key].shape, image_feature_dim)
                 total_concat_size += image_feature_dim
             else:
                 # Run through a simple MLP
@@ -76,6 +81,9 @@ class DictExtractor(BaseFeaturesExtractor):
                     nn.ReLU(),                
                 )
                 total_concat_size += feature_dim
+
+                # extractors[key] = nn.Flatten()
+                # total_concat_size += observation_space[key].shape[0]
 
         self.extractors = nn.ModuleDict(extractors)
 
