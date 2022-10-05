@@ -4,7 +4,7 @@ import argparse
 from ruamel.yaml import YAML
 
 import robosuite as suite
-from stable_baselines3 import SAC 
+from stable_baselines3 import SAC, DDPG
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
@@ -30,7 +30,8 @@ def make_env(env_cfg=None):
 
 def train_policy(env, policy_cfg, exp_name):
 
-    # Feature extractors should not be shared between actor and critic
+    # For SAC and DDPG, feature extractors should not be shared between actor and critic
+    # See https://github.com/DLR-RM/stable-baselines3/pull/935
     policy_kwargs = dict(
         features_extractor_class=DictExtractor,
         features_extractor_kwargs=policy_cfg['features_extractor'],
@@ -40,10 +41,12 @@ def train_policy(env, policy_cfg, exp_name):
     policy_path = osp.abspath(osp.join(osp.dirname(osp.realpath(__file__)), '../../trained_models'))
     os.makedirs(policy_path, exist_ok=True)
 
-    if policy_cfg['policy_name'] == 'SAC':
-        policy_cls = SAC
+    policy_classes = {'SAC': SAC, 'DDPG': DDPG}
+    policy_name = policy_cfg['policy_name']
+    if policy_name in policy_classes:
+        policy_cls = policy_classes[policy_name]
     else:
-        assert False, f"{policy_cfg['policy_name']} not implemented"
+        assert False, f"{policy_name} not implemented"
 
     policy = policy_cls(
         'MultiInputPolicy', 
@@ -89,10 +92,16 @@ def main():
     # Generate experiment name 
     # algorithm + env_name + robots + controller + obs_mode
     env_cfg, policy_cfg = cfg['env'], cfg['policy']
+    
+    obs_mode = ['proprio']
     if env_cfg['use_camera_obs']:
-        obs_mode = 'visual_proprio'
+        obs_mode.append('visual')
     else:
-        obs_mode = 'object_state_proprio'
+        obs_mode.append('obj_state')
+    if env_cfg['use_touch_obs']:
+        obs_mode.append('touch')
+    obs_mode = '_'.join(obs_mode)
+
     exp_name_args = [
         policy_cfg['policy_name'],
         env_cfg['env_name'],
@@ -106,13 +115,13 @@ def main():
         exp_name += "_" + policy_cfg["suffix"]
 
     # make env
-    env = make_vec_env(
-        make_env, 
-        env_kwargs=dict(env_cfg=env_cfg), 
-        vec_env_cls=SubprocVecEnv, 
-        n_envs=8
-    )
-    # env = make_env(env_cfg)
+    # env = make_vec_env(
+    #     make_env, 
+    #     env_kwargs=dict(env_cfg=env_cfg), 
+    #     vec_env_cls=SubprocVecEnv, 
+    #     n_envs=8
+    # )
+    env = make_env(env_cfg)
 
     # train policy
     policy = train_policy(env, policy_cfg, exp_name)

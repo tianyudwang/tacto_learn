@@ -38,6 +38,31 @@ class CNN(nn.Module):
         x = self.fc(x)
         return x
 
+class Encoder(nn.Module):
+    def __init__(self, obs_shape):
+        super().__init__()
+
+        assert len(obs_shape) == 3
+        self.repr_dim = 32 * 35 * 35
+
+        self.convnet = nn.Sequential(
+            nn.Conv2d(obs_shape[0], 32, 3, stride=2),
+            nn.ReLU(), 
+            nn.Conv2d(32, 32, 3, stride=1),
+            nn.ReLU(), 
+            nn.Conv2d(32, 32, 3, stride=1),
+            nn.ReLU(), 
+            nn.Conv2d(32, 32, 3, stride=1),
+            nn.ReLU()
+        )
+
+    def forward(self, obs):
+        # obs = obs / 255.0 - 0.5
+        # import ipdb; ipdb.set_trace()
+        obs -= 0.5
+        h = self.convnet(obs)
+        h = h.view(h.shape[0], -1)
+        return h
 
 
 class DictExtractor(BaseFeaturesExtractor):
@@ -62,8 +87,9 @@ class DictExtractor(BaseFeaturesExtractor):
         # so go over all the spaces and compute output feature sizes
         for key, subspace in observation_space.spaces.items():
             if "image" in key or "tactile_depth" in key:
-                extractors[key] = CNN(observation_space[key].shape, image_feature_dim)
-                total_concat_size += image_feature_dim
+                # extractors[key] = CNN(subspace.shape, image_feature_dim)
+                extractors[key] = Encoder(subspace.shape)
+                total_concat_size += extractors[key].repr_dim
             else:
                 # Run through a simple MLP
                 if "proprio" in key:

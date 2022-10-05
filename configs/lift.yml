@@ -10,13 +10,13 @@ env:
   controller_configs:
     default_controller: OSC_POSE
 policy:
-  policy_name: SAC
+  policy_name: DDPG
   total_timesteps: 6000000
   buffer_size: 1000000
   features_extractor:
     object_feature_dim: 64
     proprio_feature_dim: 64
-  suffix: no_share_feat_extr
+  suffix: null
 
 
 

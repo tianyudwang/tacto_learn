@@ -6,18 +6,18 @@ env:
   use_camera_obs: True
   camera_heights: 84
   camera_widths: 84
-  use_touch_obs: True
+  use_touch_obs: False
   controller_configs:
     default_controller: OSC_POSE
 policy:
   policy_name: SAC
-  total_timesteps: 1000000
-  buffer_size: 100000
+  total_timesteps: 6000000
+  buffer_size: 1000000
   features_extractor:
     image_feature_dim: 128
     proprio_feature_dim: 64
     touch_feature_dim: 32
-  suffix: image_touch
+  suffix: null
 
 
 
