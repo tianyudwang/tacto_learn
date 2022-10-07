@@ -67,7 +67,7 @@ def train_policy(env, policy_cfg, exp_name):
 
     policy_name = osp.join(policy_path, exp_name)
     policy.save(policy_name)
-    return policy
+    return polic
 
 
 def parse_args():
@@ -115,13 +115,13 @@ def main():
         exp_name += "_" + policy_cfg["suffix"]
 
     # make env
-    # env = make_vec_env(
-    #     make_env, 
-    #     env_kwargs=dict(env_cfg=env_cfg), 
-    #     vec_env_cls=SubprocVecEnv, 
-    #     n_envs=8
-    # )
-    env = make_env(env_cfg)
+    env = make_vec_env(
+        make_env, 
+        env_kwargs=dict(env_cfg=env_cfg), 
+        vec_env_cls=SubprocVecEnv, 
+        n_envs=8
+    )
+    # env = make_env(env_cfg)
 
     # train policy
     policy = train_policy(env, policy_cfg, exp_name)

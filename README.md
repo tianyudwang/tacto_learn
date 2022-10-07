@@ -17,3 +17,13 @@ pip install -e .
 ```bash
 python3 tacto_learn/scripts/train_lift.py configs/lift.yml
 ```
+
+4. Monitor results
+```bash
+tensorboard --logdir logs
+```
+
+5. Visualize trained model
+```bash
+python3 tacto_learn/scripts/visualize_policy.py configs/lift.yml --trained_model ./trained_models/SAC_Lift_Panda_OSC_POSE_proprio_obj_state
+```
