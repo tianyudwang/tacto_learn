@@ -1,0 +1,36 @@
+frame_stack: 3
+discount: 0.99
+num_seed_frames: 4000
+eval_every_frames: 10000
+num_eval_episodes: 10
+save_snapshot: false
+replay_buffer_size: 1000000
+replay_buffer_num_workers: 4
+nstep: 3
+batch_size: 256
+seed: 1
+device: cuda
+save_video: true
+save_train_video: false
+use_tb: true
+experiment: exp
+lr: 0.0001
+feature_dim: 50
+agent:
+  _target_: drqv2.DrQV2Agent
+  obs_shape: ???
+  action_shape: ???
+  device: ${device}
+  lr: ${lr}
+  critic_target_tau: 0.01
+  update_every_steps: 2
+  use_tb: ${use_tb}
+  num_expl_steps: 2000
+  hidden_dim: 1024
+  feature_dim: ${feature_dim}
+  stddev_schedule: ${stddev_schedule}
+  stddev_clip: 0.3
+num_train_frames: 3100000
+stddev_schedule: linear(1.0,0.1,500000)
+task_name: Lift
+action_repeat: 1

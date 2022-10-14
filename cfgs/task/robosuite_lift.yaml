@@ -1,0 +1,9 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: Lift
+action_repeat: 1
+replay_buffer_size: 400000
+save_video: false
+save_train_video: false
