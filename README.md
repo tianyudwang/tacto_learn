@@ -6,7 +6,7 @@ python3 train.py --task=robosuite_lift
 ## Notes
 This is a copy of the [drqv2 model](https://github.com/facebookresearch/drqv2) for robosuite envrionments. 
 
-- Make sure mujoco_py rendering is using gpu and not cpu, see [thread](https://github.com/openai/mujoco-py/issues/581). You should verify `mujoco_py.cymj` returns gpu and not cpu extension.
+- Make sure mujoco_py rendering is using gpu and not cpu, see [thread](https://github.com/openai/mujoco-py/issues/581). You should verify `mujoco_py.cymj` returns gpu and not cpu extension. In general, we should prefer egl over osmesa whenever possible, see [instructions](https://github.com/deepmind/dm_control#rendering). In `train.py`, we ensure egl is used as mujoco rendering backend by setting the environment variable `MUJOCO_GL` to `egl`.
 - When training with headless rendering, make sure to unset LD_PRELOAD variable: `unset LD_PRELOAD` if you have `export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so` in your bashrc/zshrc.
 - You should see something like this in terminal `Found x GPUs for rendering. Using device 0.`
 - For dm_control envs, fps is 70. For robosuite lift with mujoco_py cpu rendering, fps is 11. For robosuite lift with mujoco_py gpu rendering, fps is 29. 
