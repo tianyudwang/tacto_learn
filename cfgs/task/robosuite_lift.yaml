@@ -11,7 +11,7 @@ num_seed_frames: 4000
 
 
 # observation
-use_proprio: true
+use_proprio: false
 # agent:
   # obs_spec: ??? # to be specified later
 # proprio_hidden_dim: 32

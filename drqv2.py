@@ -158,7 +158,7 @@ class DrQV2Agent:
         # better to create a name to encoder dict mapping
         self.encoders = {}
         for k, shape in obs_shape.items():
-            if k == 'agentview_image':
+            if k == 'agentview_image' or k == 'observation':
                 self.encoders[k] = Encoder(shape).to(device)
             elif k == 'robot0_proprio-state':
                 self.encoders[k] = MLP(shape[0]).to(device)
@@ -208,8 +208,8 @@ class DrQV2Agent:
             obs_repr = torch.cat(obs_reprs, dim=-1)
         else:
             obs = torch.as_tensor(obs, device=self.device)
-            if len(ob.shape) == 1 or len(ob.shape) == 3:
-                ob = ob.unsqueeze(0)
+            if len(obs.shape) == 1 or len(obs.shape) == 3:
+                obs = obs.unsqueeze(0)
             obs_repr = list(self.encoders.values())[0](obs)
         return obs_repr
 
