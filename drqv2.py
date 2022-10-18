@@ -66,6 +66,27 @@ class Encoder(nn.Module):
         h = h.view(h.shape[0], -1)
         return h
 
+class MLP(nn.Module):
+    def __init__(self, in_dim, out_dim=128):
+        super().__init__()
+
+        self.repr_dim = out_dim
+
+        self.mlp = nn.Sequential(
+            nn.Linear(in_dim, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, out_dim),
+        )
+
+        self.apply(utils.weight_init)
+
+    def forward(self, x):
+        return self.mlp(x)
+
 
 class Actor(nn.Module):
     def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
@@ -133,19 +154,32 @@ class DrQV2Agent:
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
 
-        # models
-        self.encoder = Encoder(obs_shape).to(device)
-        self.actor = Actor(self.encoder.repr_dim, action_shape, feature_dim,
-                           hidden_dim).to(device)
+        # construct observation encoders based on observation spec
+        # better to create a name to encoder dict mapping
+        self.encoders = {}
+        for k, shape in obs_shape.items():
+            if k == 'agentview_image':
+                self.encoders[k] = Encoder(shape).to(device)
+            elif k == 'robot0_proprio-state':
+                self.encoders[k] = MLP(shape[0]).to(device)
+            else:
+                raise ValueError(f'encoder for {k} not implemented')
 
-        self.critic = Critic(self.encoder.repr_dim, action_shape, feature_dim,
+        encoder_repr_dim = sum([encoder.repr_dim for encoder in self.encoders.values()])
+
+        # models
+        self.actor = Actor(encoder_repr_dim, action_shape, feature_dim,
+                           hidden_dim).to(device)
+        self.critic = Critic(encoder_repr_dim, action_shape, feature_dim,
                              hidden_dim).to(device)
-        self.critic_target = Critic(self.encoder.repr_dim, action_shape,
+        self.critic_target = Critic(encoder_repr_dim, action_shape,
                                     feature_dim, hidden_dim).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
-        self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr=lr)
+        self.encoder_opts = {}
+        for k, v in self.encoders.items():
+            self.encoder_opts[k] = torch.optim.Adam(self.encoders[k].parameters(), lr=lr)
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=lr)
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=lr)
 
@@ -157,13 +191,33 @@ class DrQV2Agent:
 
     def train(self, training=True):
         self.training = training
-        self.encoder.train(training)
+        for encoder in self.encoders.values():
+            encoder.train(training)
         self.actor.train(training)
         self.critic.train(training)
 
+    def encode_obs(self, obs):
+        if isinstance(obs, dict):
+            obs_reprs = []
+            for k, v in obs.items():
+                ob = torch.as_tensor(v, device=self.device)
+                # Add trivial batch dim during inference
+                if len(ob.shape) == 1 or len(ob.shape) == 3:
+                    ob = ob.unsqueeze(0)
+                obs_reprs.append(self.encoders[k](ob))
+            obs_repr = torch.cat(obs_reprs, dim=-1)
+        else:
+            obs = torch.as_tensor(obs, device=self.device)
+            if len(ob.shape) == 1 or len(ob.shape) == 3:
+                ob = ob.unsqueeze(0)
+            obs_repr = list(self.encoders.values())[0](obs)
+        return obs_repr
+
+
     def act(self, obs, step, eval_mode):
-        obs = torch.as_tensor(obs, device=self.device)
-        obs = self.encoder(obs.unsqueeze(0))
+        # obs = torch.as_tensor(obs, device=self.device)
+        # obs = self.encoder(obs.unsqueeze(0))
+        obs = self.encode_obs(obs)
         stddev = utils.schedule(self.stddev_schedule, step)
         dist = self.actor(obs, stddev)
         if eval_mode:
@@ -195,11 +249,13 @@ class DrQV2Agent:
             metrics['critic_loss'] = critic_loss.item()
 
         # optimize encoder and critic
-        self.encoder_opt.zero_grad(set_to_none=True)
+        for encoder_opt in self.encoder_opts.values():
+            encoder_opt.zero_grad(set_to_none=True)
         self.critic_opt.zero_grad(set_to_none=True)
         critic_loss.backward()
         self.critic_opt.step()
-        self.encoder_opt.step()
+        for encoder_opt in self.encoder_opts.values():
+            encoder_opt.step()
 
         return metrics
 
@@ -236,14 +292,20 @@ class DrQV2Agent:
         batch = next(replay_iter)
         obs, action, reward, discount, next_obs = utils.to_torch(
             batch, self.device)
-
+        
         # augment
-        obs = self.aug(obs.float())
-        next_obs = self.aug(next_obs.float())
+        if isinstance(obs, dict):
+            image_key = 'agentview_image'
+            obs[image_key] = self.aug(obs[image_key].float())
+            next_obs[image_key] = self.aug(next_obs[image_key].float())
+        else:
+            obs = self.aug(obs.float())
+            next_obs = self.aug(next_obs.float())
+        
         # encode
-        obs = self.encoder(obs)
+        obs = self.encode_obs(obs)
         with torch.no_grad():
-            next_obs = self.encoder(next_obs)
+            next_obs = self.encode_obs(next_obs)
 
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()

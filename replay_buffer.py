@@ -47,19 +47,34 @@ class ReplayBufferStorage:
 
     def add(self, time_step):
         for spec in self._data_specs:
-            value = time_step[spec.name]
-            if np.isscalar(value):
-                value = np.full(spec.shape, value, spec.dtype)
-            assert spec.shape == value.shape and spec.dtype == value.dtype
-            self._current_episode[spec.name].append(value)
+            # flatten dictionary observation
+            if isinstance(spec, dict):
+                for k, sub_spec in spec.items():
+                    value = time_step.observation[sub_spec.name]
+                    self._append_spec_value(sub_spec, value)
+            else:
+                value = time_step[spec.name]
+                self._append_spec_value(spec, value)
+
         if time_step.last():
             episode = dict()
             for spec in self._data_specs:
-                value = self._current_episode[spec.name]
-                episode[spec.name] = np.array(value, spec.dtype)
+                if isinstance(spec, dict):
+                    for k, v in spec.items():
+                        value = self._current_episode[k]
+                        episode[v.name] = np.array(value, v.dtype)
+                else:
+                    value = self._current_episode[spec.name]
+                    episode[spec.name] = np.array(value, spec.dtype)
             self._current_episode = defaultdict(list)
             self._store_episode(episode)
 
+    def _append_spec_value(self, spec, value):
+        if np.isscalar(value):
+            value = np.full(spec.shape, value, spec.dtype)
+        assert spec.shape == value.shape and spec.dtype == value.dtype, f"{spec.name}, {spec.shape}, {value.shape}, {spec.dtype}, {value.dtype}"
+        self._current_episode[spec.name].append(value)
+    
     def _preload(self):
         self._num_episodes = 0
         self._num_transitions = 0
@@ -75,12 +90,13 @@ class ReplayBufferStorage:
         self._num_transitions += eps_len
         ts = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
         eps_fn = f'{ts}_{eps_idx}_{eps_len}.npz'
+        # print(f"saving {self._replay_dir / eps_fn}")
         save_episode(episode, self._replay_dir / eps_fn)
 
 
 class ReplayBuffer(IterableDataset):
     def __init__(self, replay_dir, max_size, num_workers, nstep, discount,
-                 fetch_every, save_snapshot):
+                 fetch_every, save_snapshot, obs_keys=None):
         self._replay_dir = replay_dir
         self._size = 0
         self._max_size = max_size
@@ -92,6 +108,7 @@ class ReplayBuffer(IterableDataset):
         self._fetch_every = fetch_every
         self._samples_since_last_fetch = fetch_every
         self._save_snapshot = save_snapshot
+        self._obs_keys = obs_keys
 
     def _sample_episode(self):
         eps_fn = random.choice(self._episode_fns)
@@ -148,9 +165,16 @@ class ReplayBuffer(IterableDataset):
         episode = self._sample_episode()
         # add +1 for the first dummy transition
         idx = np.random.randint(0, episode_len(episode) - self._nstep + 1) + 1
-        obs = episode['observation'][idx - 1]
+
+        if self._obs_keys is not None:
+            obs, next_obs = {}, {}
+            for k in self._obs_keys:
+                obs[k] = episode[k][idx - 1]
+                next_obs[k] = episode[k][idx + self._nstep - 1]
+        else: 
+            obs = episode['observation'][idx - 1]
+            next_obs = episode['observation'][idx + self._nstep - 1]   
         action = episode['action'][idx]
-        next_obs = episode['observation'][idx + self._nstep - 1]
         reward = np.zeros_like(episode['reward'][idx])
         discount = np.ones_like(episode['discount'][idx])
         for i in range(self._nstep):
@@ -171,7 +195,7 @@ def _worker_init_fn(worker_id):
 
 
 def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
-                       save_snapshot, nstep, discount):
+                       save_snapshot, nstep, discount, obs_keys=None):
     max_size_per_worker = max_size // max(1, num_workers)
 
     iterable = ReplayBuffer(replay_dir,
@@ -180,7 +204,8 @@ def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
                             nstep,
                             discount,
                             fetch_every=1000,
-                            save_snapshot=save_snapshot)
+                            save_snapshot=save_snapshot,
+                            obs_keys=obs_keys)
 
     loader = torch.utils.data.DataLoader(iterable,
                                          batch_size=batch_size,

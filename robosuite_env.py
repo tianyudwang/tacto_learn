@@ -103,11 +103,12 @@ class DMEWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 class FrameStackWrapper(dm_env.Environment):
-    def __init__(self, env, num_frames, pixels_key='agentview_image'):
+    def __init__(self, env, num_frames, pixels_key='agentview_image', use_proprio=False):
         self._env = env
         self._num_frames = num_frames
         self._frames = deque([], maxlen=num_frames)
         self._pixels_key = pixels_key
+        self._use_proprio = use_proprio
 
         wrapped_obs_spec = env.observation_spec()
         assert pixels_key in wrapped_obs_spec
@@ -116,16 +117,35 @@ class FrameStackWrapper(dm_env.Environment):
         # remove batch dim
         if len(pixels_shape) == 4:
             pixels_shape = pixels_shape[1:]
-        self._obs_spec = specs.BoundedArray(shape=np.concatenate(
+        self._vis_spec = specs.BoundedArray(shape=np.concatenate(
             [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
                                             dtype=np.uint8,
                                             minimum=0,
                                             maximum=255,
                                             name='observation')
 
+        # observation_spec is a dictionary if using multimodal observation
+        if self._use_proprio:
+            self._proprio_key = 'robot0_proprio-state'
+            assert self._proprio_key in wrapped_obs_spec
+            self._obs_spec = OrderedDict()
+            self._vis_spec = self._vis_spec.replace(name=self._pixels_key)
+            self._obs_spec[self._pixels_key] = self._vis_spec
+            self._obs_spec[self._proprio_key] = wrapped_obs_spec[self._proprio_key].replace(dtype=np.float32)
+        else:
+            self._obs_spec = self._vis_spec
+
+
     def _transform_observation(self, time_step):
         assert len(self._frames) == self._num_frames
-        obs = np.concatenate(list(self._frames), axis=0)
+        vis_obs = np.concatenate(list(self._frames), axis=0)
+
+        if self._use_proprio:
+            obs = OrderedDict()
+            obs[self._pixels_key] = vis_obs
+            obs[self._proprio_key] = time_step.observation[self._proprio_key].astype(np.float32)
+        else:
+            obs = vis_obs
         return time_step._replace(observation=obs)
 
     def _extract_pixels(self, time_step):
@@ -190,7 +210,7 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-def make(name, frame_stack, seed):
+def make(name, frame_stack, use_proprio, seed):
     controller_configs = suite.load_controller_config(
         default_controller="OSC_POSE"
     )
@@ -216,6 +236,6 @@ def make(name, frame_stack, seed):
     # env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
 
     # stack several frames
-    env = FrameStackWrapper(env, frame_stack, 'agentview_image')
+    env = FrameStackWrapper(env, frame_stack, 'agentview_image', use_proprio)
     env = ExtendedTimeStepWrapper(env)
     return env

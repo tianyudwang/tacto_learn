@@ -28,7 +28,13 @@ torch.backends.cudnn.benchmark = True
 
 
 def make_agent(obs_spec, action_spec, cfg):
-    cfg.obs_shape = obs_spec.shape
+    if isinstance(obs_spec, dict):
+        obs_shape = {}
+        for k, v in obs_spec.items():
+            obs_shape[k] = v.shape
+        cfg.obs_shape = obs_shape
+    else:    
+        cfg.obs_shape = {obs_spec.name: obs_spec.shape}
     cfg.action_shape = action_spec.shape
     return hydra.utils.instantiate(cfg)
 
@@ -59,8 +65,18 @@ class Workspace:
         #                           self.cfg.action_repeat, self.cfg.seed)
         # self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
         #                          self.cfg.action_repeat, self.cfg.seed)
-        self.train_env = rbe.make(self.cfg.task_name, self.cfg.frame_stack, self.cfg.seed)
-        self.eval_env = rbe.make(self.cfg.task_name, self.cfg.frame_stack, self.cfg.seed)
+        self.train_env = rbe.make(
+            self.cfg.task_name, 
+            self.cfg.frame_stack, 
+            self.cfg.use_proprio,
+            self.cfg.seed
+        )
+        self.eval_env = rbe.make(
+            self.cfg.task_name, 
+            self.cfg.frame_stack, 
+            self.cfg.use_proprio,
+            self.cfg.seed
+        )
 
         # create replay buffer
         data_specs = (self.train_env.observation_spec(),
@@ -71,10 +87,15 @@ class Workspace:
         self.replay_storage = ReplayBufferStorage(data_specs,
                                                   self.work_dir / 'buffer')
 
+        obs_spec = self.train_env.observation_spec()
+        if isinstance(obs_spec, dict):
+            obs_keys = list(obs_spec.keys())
+        else:
+            obs_keys = None
         self.replay_loader = make_replay_loader(
             self.work_dir / 'buffer', self.cfg.replay_buffer_size,
             self.cfg.batch_size, self.cfg.replay_buffer_num_workers,
-            self.cfg.save_snapshot, self.cfg.nstep, self.cfg.discount)
+            self.cfg.save_snapshot, self.cfg.nstep, self.cfg.discount, obs_keys)
         self._replay_iter = None
 
         self.video_recorder = VideoRecorder(
@@ -171,10 +192,10 @@ class Workspace:
                 episode_reward = 0
 
             # try to evaluate
-            if eval_every_step(self.global_step):
-                self.logger.log('eval_total_time', self.timer.total_time(),
-                                self.global_frame)
-                self.eval()
+            # if eval_every_step(self.global_step):
+            #     self.logger.log('eval_total_time', self.timer.total_time(),
+            #                     self.global_frame)
+            #     self.eval()
 
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):

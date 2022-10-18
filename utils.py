@@ -46,7 +46,13 @@ def soft_update_params(net, target_net, tau):
 
 
 def to_torch(xs, device):
-    return tuple(torch.as_tensor(x, device=device) for x in xs)
+    xs_torch = []
+    for x in xs:
+        if isinstance(x, dict):
+            xs_torch.append({k: torch.as_tensor(v, device=device) for k, v in x.items()})
+        else:
+            xs_torch.append(torch.as_tensor(x, device=device))
+    return xs_torch
 
 
 def weight_init(m):

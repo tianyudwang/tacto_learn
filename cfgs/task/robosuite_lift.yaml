@@ -7,3 +7,11 @@ action_repeat: 1
 replay_buffer_size: 400000
 save_video: false
 save_train_video: false
+num_seed_frames: 4000
+
+
+# observation
+use_proprio: true
+# agent:
+  # obs_spec: ??? # to be specified later
+# proprio_hidden_dim: 32
