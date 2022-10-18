@@ -11,6 +11,7 @@ os.environ['MUJOCO_GL'] = 'egl'
 os.environ['HYDRA_FULL_ERROR'] = '1'
 
 from pathlib import Path
+import psutil
 
 import hydra
 import numpy as np
@@ -191,11 +192,13 @@ class Workspace:
                 episode_step = 0
                 episode_reward = 0
 
+                print(f"Available RAM: {psutil.virtual_memory().available / 1e9} GB")
+
             # try to evaluate
-            # if eval_every_step(self.global_step):
-            #     self.logger.log('eval_total_time', self.timer.total_time(),
-            #                     self.global_frame)
-            #     self.eval()
+            if eval_every_step(self.global_step):
+                self.logger.log('eval_total_time', self.timer.total_time(),
+                                self.global_frame)
+                self.eval()
 
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):
