@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import abc
 import datetime
 import io
 import random
@@ -94,7 +95,7 @@ class ReplayBufferStorage:
         save_episode(episode, self._replay_dir / eps_fn)
 
 
-class ReplayBuffer(IterableDataset):
+class IterableReplayBuffer(IterableDataset):
     def __init__(self, replay_dir, max_size, num_workers, nstep, discount,
                  fetch_every, save_snapshot, obs_keys=None):
         self._replay_dir = replay_dir
@@ -188,6 +189,19 @@ class ReplayBuffer(IterableDataset):
             yield self._sample()
 
 
+class AbstractReplayBuffer(abc.ABC):
+   @abc.abstractmethod
+   def add(self, time_step):
+       pass
+
+   @abc.abstractmethod
+   def __next__(self, ):
+       pass
+
+   @abc.abstractmethod
+   def __len__(self, ):
+       pass
+
 def _worker_init_fn(worker_id):
     seed = np.random.get_state()[1][0] + worker_id
     np.random.seed(seed)
@@ -198,14 +212,14 @@ def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
                        save_snapshot, nstep, discount, obs_keys=None):
     max_size_per_worker = max_size // max(1, num_workers)
 
-    iterable = ReplayBuffer(replay_dir,
-                            max_size_per_worker,
-                            num_workers,
-                            nstep,
-                            discount,
-                            fetch_every=1000,
-                            save_snapshot=save_snapshot,
-                            obs_keys=obs_keys)
+    iterable = IterableReplayBuffer(replay_dir,
+                                    max_size_per_worker,
+                                    num_workers,
+                                    nstep,
+                                    discount,
+                                    fetch_every=1000,
+                                    save_snapshot=save_snapshot,
+                                    obs_keys=obs_keys)
 
     loader = torch.utils.data.DataLoader(iterable,
                                          batch_size=batch_size,
