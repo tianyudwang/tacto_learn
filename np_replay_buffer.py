@@ -25,13 +25,16 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
 
         obs_spec, act_spec = data_specs[0], data_specs[1]
         if isinstance(obs_spec, dict):
+            self.obs_shape = {k: v.shape for k, v in obs_spec.items()}
             self.obs = {}
-            for k, v in obs_spec.items():
-                shape = v.shape
-                # images
+            for k, shape in self.obs_shape.items():
+                # images, assumes channel-first
                 if len(shape) == 3:
                     self.ims_channels = shape[0] // self.frame_stack
-                    self.obs[k] = np.zeros([self.buffer_size, self.ims_channels, *self.shape[1:]], dtype=np.uint8)
+                    self.obs[k] = np.zeros(
+                        [self.buffer_size, self.ims_channels, *shape[1:]], 
+                        dtype=np.uint8
+                    )
                 # proprio state
                 elif len(shape) == 1:
                     self.obs[k] = np.zeros([self.buffer_size, *shape], dtype=np.float32)
@@ -64,25 +67,48 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
         else:
             print(f"Replay buffer using {total_memory_usage/1e9:.2f} GB out of {mem_available/1e9:.2f} GB available memory")
 
-    # def _initial_setup(self, time_step):
-    #     self.index = 0
-    #     self.obs_shape = list(time_step.observation.shape)
-    #     self.ims_channels = self.obs_shape[0] // self.frame_stack
-    #     self.act_shape = time_step.action.shape
+    def __len__(self):
+        if self.full:
+            return self.buffer_size
+        else:
+            return self.index
 
-    #     self.obs = np.zeros([self.buffer_size, self.ims_channels, *self.obs_shape[1:]], dtype=np.uint8)
-    #     self.act = np.zeros([self.buffer_size, *self.act_shape], dtype=np.float32)
-    #     self.rew = np.zeros([self.buffer_size], dtype=np.float32)
-    #     self.dis = np.zeros([self.buffer_size], dtype=np.float32)
-    #     # which timesteps can be validly sampled (Not within nstep from end of
-    #     # an episode or last recorded observation)
-    #     self.valid = np.zeros([self.buffer_size], dtype=np.bool_)
+    def _extract_obs(self, obs):
+        """
+        Extracts latest timestep observation 
+        where images may include frame_stack of previous timesteps
+        """
+        if isinstance(obs, dict):
+            latest_obs = {}
+            for k, v in obs.items():
+                if self._is_image(v):
+                    latest_obs[k] = v[-self.ims_channels:]
+                else:
+                    latest_obs[k] = v
+        else:
+            if self._is_image(obs):
+                latest_obs = obs[-self.ims_channels:]
+            else:
+                latest_obs = obs
+        return latest_obs
 
+    def _is_image(self, obs):
+        """Check if observation is an image"""
+        return len(obs.shape) >= 3
 
+    def _copy_obs_to_buffer(self, obs, index):
+        """
+        Copy observation into buffer at given index location
+        """
+        if isinstance(obs, dict):
+            for k, v in obs.items():
+                self.obs[k][index] = v
+        else:
+            self.obs[index] = obs
 
     def add(self, time_step):
         first = time_step.first()
-        latest_obs = time_step.observation[-self.ims_channels:]
+        latest_obs = self._extract_obs(time_step.observation)
         if first:
             # if first observation in a trajectory, record frame_stack copies of it
             end_index = self.index + self.frame_stack
@@ -90,22 +116,30 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
             if end_invalid > self.buffer_size:
                 if end_index > self.buffer_size:
                     end_index = end_index % self.buffer_size
-                    self.obs[self.index:self.buffer_size] = latest_obs
-                    self.obs[0:end_index] = latest_obs
+                    # self.obs[self.index:self.buffer_size] = latest_obs
+                    # self.obs[0:end_index] = latest_obs
+                    for index in range(self.index, self.buffer_size):
+                        self._copy_obs_to_buffer(latest_obs, index)
+                    for index in range(end_index):
+                        self._copy_obs_to_buffer(latest_obs, index)
                     self.full = True
                 else:
-                    self.obs[self.index:end_index] = latest_obs
+                    # self.obs[self.index:end_index] = latest_obs
+                    for index in range(self.index, end_index):
+                        self._copy_obs_to_buffer(latest_obs, index)
                 end_invalid = end_invalid % self.buffer_size
                 self.valid[self.index:self.buffer_size] = False
                 self.valid[0:end_invalid] = False
             else:
-                self.obs[self.index:end_index] = latest_obs
+                # self.obs[self.index:end_index] = latest_obs
+                for index in range(self.index, end_index):
+                    self._copy_obs_to_buffer(latest_obs, index)
                 self.valid[self.index:end_invalid] = False
             self.index = end_index
             self.traj_index = 1
         else:
-            np.copyto(self.obs[self.index], latest_obs)
-            np.copyto(self.act[self.index], time_step.action)
+            self._copy_obs_to_buffer(latest_obs, self.index)
+            self.act[self.index] = time_step.action
             self.rew[self.index] = time_step.reward
             self.dis[self.index] = time_step.discount
             self.valid[(self.index + self.frame_stack) % self.buffer_size] = False
@@ -124,8 +158,10 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
 
     def gather_nstep_indices(self, indices):
         n_samples = indices.shape[0]
-        all_gather_ranges = np.stack([np.arange(indices[i] - self.frame_stack, indices[i] + self.nstep)
-                                  for i in range(n_samples)], axis=0) % self.buffer_size
+        all_gather_ranges = np.stack(
+            [np.arange(indices[i] - self.frame_stack, indices[i] + self.nstep)
+            for i in range(n_samples)], axis=0
+        ) % self.buffer_size
         gather_ranges = all_gather_ranges[:, self.frame_stack:] # bs x nstep
         obs_gather_ranges = all_gather_ranges[:, :self.frame_stack]
         nobs_gather_ranges = all_gather_ranges[:, -self.frame_stack:]
@@ -136,8 +172,20 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
         # marginal additional speed improvement
         rew = np.sum(all_rewards * self.discount_vec, axis=1, keepdims=True)
 
-        obs = np.reshape(self.obs[obs_gather_ranges], [n_samples, *self.obs_shape])
-        nobs = np.reshape(self.obs[nobs_gather_ranges], [n_samples, *self.obs_shape])
+        if isinstance(self.obs_shape, dict):
+            obs, nobs = {}, {}
+            for k, shape in self.obs_shape.items():
+                # gather images with frame stacks
+                if len(shape) == 3:
+                    obs[k] = np.reshape(self.obs[k][obs_gather_ranges], [n_samples, *shape])
+                    nobs[k] = np.reshape(self.obs[k][nobs_gather_ranges], [n_samples, *shape])
+                # extract proprio states
+                else:
+                    obs[k] = self.obs[k][indices]
+                    nobs[k] = self.obs[k][indices]
+        else:
+            obs = np.reshape(self.obs[obs_gather_ranges], [n_samples, *self.obs_shape])
+            nobs = np.reshape(self.obs[nobs_gather_ranges], [n_samples, *self.obs_shape])
 
         act = self.act[indices]
         dis = np.expand_dims(self.next_dis * self.dis[nobs_gather_ranges[:, -1]], axis=-1)
@@ -145,8 +193,3 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
         ret = (obs, act, rew, dis, nobs)
         return ret
 
-    def __len__(self):
-        if self.full:
-            return self.buffer_size
-        else:
-            return self.index
