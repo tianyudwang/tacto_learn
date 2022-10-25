@@ -9,6 +9,9 @@ import robosuite as suite
 
 
 class ExtendedTimeStep(NamedTuple):
+    """
+    ExtendedTimeStep object includes (a_t, r_t, gamma_t, o_{t+1})
+    """
     step_type: Any
     reward: Any
     discount: Any
@@ -31,6 +34,10 @@ class ExtendedTimeStep(NamedTuple):
             return tuple.__getitem__(self, attr)
 
 class DMEWrapper(dm_env.Environment):
+    """
+    Create an dm_env interface
+    observation/observation_spec is always a dictionary even if there is only one mode
+    """
     def __init__(self, env, keys=None):
         self._env = env
         
@@ -51,7 +58,7 @@ class DMEWrapper(dm_env.Environment):
         ob = self._env.observation_spec()
         self._observation_spec = OrderedDict()
         for k in self.keys:
-            assert k in ob.keys(), f"{k} not in robosuite observation"
+            assert k in ob.keys(), f"Observation key {k} not in robosuite observation"
             self._observation_spec[k] = specs.Array(ob[k].shape, ob[k].dtype, name=k)
 
         self._action_spec = specs.BoundedArray(
@@ -95,7 +102,7 @@ class DMEWrapper(dm_env.Environment):
         return TimeStep(
             step_type=step_type, 
             reward=reward, 
-            discount=1,             # discount not an attribute of robosuite MujocoEnv
+            discount=1.0,             # discount not an attribute of robosuite MujocoEnv
             observation=observation,
         )
 
@@ -103,69 +110,81 @@ class DMEWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 class FrameStackWrapper(dm_env.Environment):
-    def __init__(self, env, num_frames, pixels_key='agentview_image', use_proprio=False):
+    """
+    Frame stack and make channel first for image observations
+    Vector observations will be cast to float32
+    Assumes only one image observation mode
+    """
+    def __init__(self, env, num_frames):
         self._env = env
         self._num_frames = num_frames
         self._frames = deque([], maxlen=num_frames)
-        self._pixels_key = pixels_key
-        self._use_proprio = use_proprio
 
         wrapped_obs_spec = env.observation_spec()
-        assert pixels_key in wrapped_obs_spec
+        assert isinstance(wrapped_obs_spec, dict), "Env not providing a dictionary observation"
 
-        pixels_shape = wrapped_obs_spec[pixels_key].shape
-        # remove batch dim
-        if len(pixels_shape) == 4:
-            pixels_shape = pixels_shape[1:]
-        self._vis_spec = specs.BoundedArray(shape=np.concatenate(
-            [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
-                                            dtype=np.uint8,
-                                            minimum=0,
-                                            maximum=255,
-                                            name='observation')
+        self._keys = list(wrapped_obs_spec.keys())
+        self._obs_spec = OrderedDict()
+        self._image_key = None
+        for k, spec in wrapped_obs_spec.items():
+            if len(spec.shape) > 1:
+                self._image_key = k
+                image_shape = spec.shape
 
-        # observation_spec is a dictionary if using multimodal observation
-        if self._use_proprio:
-            self._proprio_key = 'robot0_proprio-state'
-            assert self._proprio_key in wrapped_obs_spec
-            self._obs_spec = OrderedDict()
-            self._vis_spec = self._vis_spec.replace(name=self._pixels_key)
-            self._obs_spec[self._pixels_key] = self._vis_spec
-            self._obs_spec[self._proprio_key] = wrapped_obs_spec[self._proprio_key].replace(dtype=np.float32)
-        else:
-            self._obs_spec = self._vis_spec
+                # remove batch dim
+                if len(image_shape) == 4:
+                    image_shape = image_shape[1:]
+    
+                self._image_spec = specs.BoundedArray(
+                    shape=np.concatenate(
+                        [[image_shape[2] * num_frames], image_shape[:2]], 
+                        axis=0
+                    ),
+                    dtype=np.uint8,
+                    minimum=0,
+                    maximum=255,
+                    name=k
+                )
+                self._obs_spec[k] = self._image_spec
+            else:
+                self._obs_spec[k] = spec.replace(dtype=np.float32)
 
 
     def _transform_observation(self, time_step):
-        assert len(self._frames) == self._num_frames
-        vis_obs = np.concatenate(list(self._frames), axis=0)
+        """
+        Stack frames for image and cast type for vector
+        """
+        ob = time_step.observation
+        for k, v in ob.items():
+            if k == self._image_key:
+                assert len(self._frames) == self._num_frames
+                vis_obs = np.concatenate(list(self._frames), axis=0)
+                ob[k] = vis_obs
+            else:
+                ob[k] = v.astype(np.float32)
+        return time_step._replace(observation=ob)
 
-        if self._use_proprio:
-            obs = OrderedDict()
-            obs[self._pixels_key] = vis_obs
-            obs[self._proprio_key] = time_step.observation[self._proprio_key].astype(np.float32)
+    def _extract_image(self, time_step):
+        if self._image_key is None:
+            return None
         else:
-            obs = vis_obs
-        return time_step._replace(observation=obs)
-
-    def _extract_pixels(self, time_step):
-        pixels = time_step.observation[self._pixels_key]
-        # remove batch dim
-        if len(pixels.shape) == 4:
-            pixels = pixels[0]
-        return pixels.transpose(2, 0, 1).copy()
+            image = time_step.observation[self._image_key]
+            # remove batch dim
+            if len(image.shape) == 4:
+                image = image[0]
+            return image.transpose(2, 0, 1).copy()
 
     def reset(self):
         time_step = self._env.reset()
-        pixels = self._extract_pixels(time_step)
+        image = self._extract_image(time_step)
         for _ in range(self._num_frames):
-            self._frames.append(pixels)
+            self._frames.append(image)
         return self._transform_observation(time_step)
 
     def step(self, action):
         time_step = self._env.step(action)
-        pixels = self._extract_pixels(time_step)
-        self._frames.append(pixels)
+        image = self._extract_image(time_step)
+        self._frames.append(image)
         return self._transform_observation(time_step)
 
     def observation_spec(self):
@@ -179,6 +198,9 @@ class FrameStackWrapper(dm_env.Environment):
 
 
 class ExtendedTimeStepWrapper(dm_env.Environment):
+    """
+    ExtendedTimeStep object includes (a_t, r_t, gamma_t, o_{t+1})
+    """
     def __init__(self, env):
         self._env = env
 
@@ -210,32 +232,37 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-def make(name, frame_stack, use_proprio, seed):
-    controller_configs = suite.load_controller_config(
-        default_controller="OSC_POSE"
-    )
+def make(env_cfg, frame_stack):
+
+    # Always use OSC controller
+    controller_configs = suite.load_controller_config(default_controller="OSC_POSE")
+
+    has_offscreen_renderer = True if env_cfg['use_camera_obs'] else False
 
     env = suite.make(
         env_name="Lift", # try with other tasks like "Stack" and "Door"
         robots="Panda",  # try with other robots like "Sawyer" and "Jaco"
+        reward_shaping=True, 
         has_renderer=False,
-        has_offscreen_renderer=True,
-        use_camera_obs=True,
-        use_object_obs=False,
+        has_offscreen_renderer=has_offscreen_renderer,
+        use_camera_obs=env_cfg['use_camera_obs'],
+        use_object_obs=env_cfg['use_object_obs'],
         camera_heights=84,
         camera_widths=84,
         controller_configs=controller_configs
     )
 
-    env = DMEWrapper(env)
+    obs_keys = []
+    if env_cfg['use_proprio']:
+        obs_keys.append('robot0_proprio-state')
+    if env_cfg['use_camera_obs']:
+        obs_keys.append('agentview_image')
+    if env_cfg['use_object_obs']:
+        obs_keys.append('object-state')
+    # TODO: Add other observation keys, e.g. tactile/touch
 
     # add wrappers
-    # Robosuite env does not need action repear and action scale
-    # env = ActionDTypeWrapper(env, np.float32)
-    # env = ActionRepeatWrapper(env, action_repeat)
-    # env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
-
-    # stack several frames
-    env = FrameStackWrapper(env, frame_stack, 'agentview_image', use_proprio)
+    env = DMEWrapper(env, obs_keys)
+    env = FrameStackWrapper(env, frame_stack)
     env = ExtendedTimeStepWrapper(env)
     return env

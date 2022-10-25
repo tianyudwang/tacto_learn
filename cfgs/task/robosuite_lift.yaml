@@ -3,7 +3,9 @@ defaults:
   - _self_
 
 task_name: Lift
-action_repeat: 1
+# action repeat is not a parameter in robosuite
+# maybe we can set control_freq but not necessary
+action_repeat: 1          
 replay_buffer_size: 1000000
 save_video: false
 save_train_video: false
@@ -11,7 +13,12 @@ num_seed_frames: 4000
 
 
 # observation
-use_proprio: false
-# agent:
-  # obs_spec: ??? # to be specified later
-# proprio_hidden_dim: 32
+observation_modes:
+  use_proprio: true           
+  # Use object true state or images from fixed third person view
+  use_object_obs: true
+  use_camera_obs: false
+  # Use tactile sensors
+  use_touch_obs: false
+  use_tactile_obs: false
+

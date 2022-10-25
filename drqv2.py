@@ -51,26 +51,32 @@ class Encoder(nn.Module):
 
         assert len(obs_shape) == 3
         self.repr_dim = 32 * 35 * 35
+        self.feat_dim = 50
 
         self.convnet = nn.Sequential(nn.Conv2d(obs_shape[0], 32, 3, stride=2),
                                      nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
                                      nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
                                      nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
                                      nn.ReLU())
-
+        self.fc = nn.Sequential(
+            nn.Linear(self.repr_dim, self.feat_dim),
+            nn.LayerNorm(self.feat_dim), 
+            nn.Tanh()
+        )
         self.apply(utils.weight_init)
 
     def forward(self, obs):
         obs = obs / 255.0 - 0.5
         h = self.convnet(obs)
         h = h.view(h.shape[0], -1)
+        h = self.fc(h)
         return h
 
 class MLP(nn.Module):
     def __init__(self, in_dim, out_dim=128):
         super().__init__()
 
-        self.repr_dim = out_dim
+        self.feat_dim = out_dim
 
         self.mlp = nn.Sequential(
             nn.Linear(in_dim, 256),
@@ -89,11 +95,11 @@ class MLP(nn.Module):
 
 
 class Actor(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
+    def __init__(self, feature_dim, action_shape, hidden_dim):
         super().__init__()
 
-        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-                                   nn.LayerNorm(feature_dim), nn.Tanh())
+        # self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
+        #                            nn.LayerNorm(feature_dim), nn.Tanh())
 
         self.policy = nn.Sequential(nn.Linear(feature_dim, hidden_dim),
                                     nn.ReLU(inplace=True),
@@ -104,9 +110,9 @@ class Actor(nn.Module):
         self.apply(utils.weight_init)
 
     def forward(self, obs, std):
-        h = self.trunk(obs)
+        # h = self.trunk(obs)
 
-        mu = self.policy(h)
+        mu = self.policy(obs)
         mu = torch.tanh(mu)
         std = torch.ones_like(mu) * std
 
@@ -115,11 +121,11 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
+    def __init__(self, feature_dim, action_shape, hidden_dim):
         super().__init__()
 
-        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-                                   nn.LayerNorm(feature_dim), nn.Tanh())
+        # self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
+        #                            nn.LayerNorm(feature_dim), nn.Tanh())
 
         self.Q1 = nn.Sequential(
             nn.Linear(feature_dim + action_shape[0], hidden_dim),
@@ -134,8 +140,8 @@ class Critic(nn.Module):
         self.apply(utils.weight_init)
 
     def forward(self, obs, action):
-        h = self.trunk(obs)
-        h_action = torch.cat([h, action], dim=-1)
+        # h = self.trunk(obs)
+        h_action = torch.cat([obs, action], dim=-1)
         q1 = self.Q1(h_action)
         q2 = self.Q2(h_action)
 
@@ -155,25 +161,25 @@ class DrQV2Agent:
         self.stddev_clip = stddev_clip
 
         # construct observation encoders based on observation spec
-        # better to create a name to encoder dict mapping
         self.encoders = {}
+        self.image_key = None
         for k, shape in obs_shape.items():
             if k == 'agentview_image' or k == 'observation':
                 self.encoders[k] = Encoder(shape).to(device)
+                self.image_key = k
             elif k == 'robot0_proprio-state':
-                self.encoders[k] = MLP(shape[0]).to(device)
+                self.encoders[k] = MLP(shape[0], out_dim=32).to(device)
+            elif k == 'object-state':
+                self.encoders[k] = MLP(shape[0], out_dim=32).to(device)
             else:
-                raise ValueError(f'encoder for {k} not implemented')
+                raise ValueError(f'Encoder for {k} not implemented')
 
-        encoder_repr_dim = sum([encoder.repr_dim for encoder in self.encoders.values()])
+        encoder_feat_dim = sum([encoder.feat_dim for encoder in self.encoders.values()])
 
         # models
-        self.actor = Actor(encoder_repr_dim, action_shape, feature_dim,
-                           hidden_dim).to(device)
-        self.critic = Critic(encoder_repr_dim, action_shape, feature_dim,
-                             hidden_dim).to(device)
-        self.critic_target = Critic(encoder_repr_dim, action_shape,
-                                    feature_dim, hidden_dim).to(device)
+        self.actor = Actor(encoder_feat_dim, action_shape, hidden_dim).to(device)
+        self.critic = Critic(encoder_feat_dim, action_shape, hidden_dim).to(device)
+        self.critic_target = Critic(encoder_feat_dim, action_shape, hidden_dim).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
@@ -197,26 +203,18 @@ class DrQV2Agent:
         self.critic.train(training)
 
     def encode_obs(self, obs):
-        if isinstance(obs, dict):
-            obs_reprs = []
-            for k, v in obs.items():
-                ob = torch.as_tensor(v, device=self.device)
-                # Add trivial batch dim during inference
-                if len(ob.shape) == 1 or len(ob.shape) == 3:
-                    ob = ob.unsqueeze(0)
-                obs_reprs.append(self.encoders[k](ob))
-            obs_repr = torch.cat(obs_reprs, dim=-1)
-        else:
-            obs = torch.as_tensor(obs, device=self.device)
-            if len(obs.shape) == 1 or len(obs.shape) == 3:
-                obs = obs.unsqueeze(0)
-            obs_repr = list(self.encoders.values())[0](obs)
-        return obs_repr
-
+        assert isinstance(obs, dict), "Observation must be wrapped in dictionary"
+        obs_feats = []
+        for k, v in obs.items():
+            ob = torch.as_tensor(v, device=self.device)
+            # Add trivial batch dim during inference
+            if len(ob.shape) == 1 or len(ob.shape) == 3:
+                ob = ob.unsqueeze(0)
+            obs_feats.append(self.encoders[k](ob))
+        obs_feat = torch.cat(obs_feats, dim=-1)
+        return obs_feat
 
     def act(self, obs, step, eval_mode):
-        # obs = torch.as_tensor(obs, device=self.device)
-        # obs = self.encoder(obs.unsqueeze(0))
         obs = self.encode_obs(obs)
         stddev = utils.schedule(self.stddev_schedule, step)
         dist = self.actor(obs, stddev)
@@ -293,14 +291,10 @@ class DrQV2Agent:
         obs, action, reward, discount, next_obs = utils.to_torch(
             batch, self.device)
         
-        # augment
-        if isinstance(obs, dict):
-            image_key = 'agentview_image'
+        # image shift augment
+        if self.image_key is not None:
             obs[image_key] = self.aug(obs[image_key].float())
             next_obs[image_key] = self.aug(next_obs[image_key].float())
-        else:
-            obs = self.aug(obs.float())
-            next_obs = self.aug(next_obs.float())
         
         # encode
         obs = self.encode_obs(obs)

@@ -24,26 +24,26 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
         mem_available = psutil.virtual_memory().available
 
         obs_spec, act_spec = data_specs[0], data_specs[1]
-        if isinstance(obs_spec, dict):
-            self.obs_shape = {k: v.shape for k, v in obs_spec.items()}
-            self.obs = {}
-            for k, shape in self.obs_shape.items():
-                # images, assumes channel-first
-                if len(shape) == 3:
-                    self.ims_channels = shape[0] // self.frame_stack
-                    self.obs[k] = np.zeros(
-                        [self.buffer_size, self.ims_channels, *shape[1:]], 
-                        dtype=np.uint8
-                    )
-                # proprio state
-                elif len(shape) == 1:
-                    self.obs[k] = np.zeros([self.buffer_size, *shape], dtype=np.float32)
-                else:
-                    raise ValueError(f"Invalid observation shape {shape} for {k}")
-        else:
-            self.obs_shape = obs_spec.shape
-            self.ims_channels = self.obs_shape[0] // self.frame_stack
-            self.obs = np.zeros([self.buffer_size, self.ims_channels, *self.obs_shape[1:]], dtype=np.uint8)
+        assert isinstance(obs_spec, dict), "Observation must be wrapped in a dictionary"
+        self.obs_shape = {k: v.shape for k, v in obs_spec.items()}
+        self.obs = {}
+        for k, shape in self.obs_shape.items():
+            # images, assumes channel-first
+            if len(shape) == 3:
+                self.ims_channels = shape[0] // self.frame_stack
+                self.obs[k] = np.zeros(
+                    [self.buffer_size, self.ims_channels, *shape[1:]], 
+                    dtype=np.uint8
+                )
+            # proprio state
+            elif len(shape) == 1:
+                self.obs[k] = np.zeros([self.buffer_size, *shape], dtype=np.float32)
+            else:
+                raise ValueError(f"Invalid observation shape {shape} for {k}")
+        # else:
+        #     self.obs_shape = obs_spec.shape
+        #     self.ims_channels = self.obs_shape[0] // self.frame_stack
+        #     self.obs = np.zeros([self.buffer_size, self.ims_channels, *self.obs_shape[1:]], dtype=np.uint8)
 
         self.act_shape = act_spec.shape
         self.act = np.zeros([self.buffer_size, *self.act_shape], dtype=np.float32)
@@ -78,18 +78,13 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
         Extracts latest timestep observation 
         where images may include frame_stack of previous timesteps
         """
-        if isinstance(obs, dict):
-            latest_obs = {}
-            for k, v in obs.items():
-                if self._is_image(v):
-                    latest_obs[k] = v[-self.ims_channels:]
-                else:
-                    latest_obs[k] = v
-        else:
-            if self._is_image(obs):
-                latest_obs = obs[-self.ims_channels:]
+        assert isinstance(obs, dict), "Observation must be wrapped in a dictionary"
+        latest_obs = {}
+        for k, v in obs.items():
+            if self._is_image(v):
+                latest_obs[k] = v[-self.ims_channels:]
             else:
-                latest_obs = obs
+                latest_obs[k] = v
         return latest_obs
 
     def _is_image(self, obs):
@@ -181,8 +176,8 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
                     nobs[k] = np.reshape(self.obs[k][nobs_gather_ranges], [n_samples, *shape])
                 # extract proprio states
                 else:
-                    obs[k] = self.obs[k][indices]
-                    nobs[k] = self.obs[k][indices]
+                    obs[k] = self.obs[k][obs_gather_ranges[:,-1]]
+                    nobs[k] = self.obs[k][nobs_gather_ranges[:,-1]]
         else:
             obs = np.reshape(self.obs[obs_gather_ranges], [n_samples, *self.obs_shape])
             nobs = np.reshape(self.obs[nobs_gather_ranges], [n_samples, *self.obs_shape])
