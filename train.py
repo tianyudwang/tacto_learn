@@ -89,10 +89,9 @@ class Workspace:
                       specs.Array((1,), np.float32, 'reward'),
                       specs.Array((1,), np.float32, 'discount'))
 
-        print(self.train_env.observation_spec())
+        print("Observation spec:", self.train_env.observation_spec())
         self.replay_buffer = hydra.utils.instantiate(self.cfg.replay_buffer,
                                                      data_specs=data_specs)
-
         self.video_recorder = VideoRecorder(
             self.work_dir if self.cfg.save_video else None)
         self.train_video_recorder = TrainVideoRecorder(

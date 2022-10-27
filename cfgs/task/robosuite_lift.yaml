@@ -10,11 +10,12 @@ replay_buffer_size: 1000000
 save_video: false
 save_train_video: false
 num_seed_frames: 4000
+nstep: 1
 
 
 # observation
 observation_modes:
-  use_proprio: true           
+  use_proprio: true
   # Use object true state or images from fixed third person view
   use_object_obs: true
   use_camera_obs: false

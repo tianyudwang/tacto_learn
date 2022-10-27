@@ -7,11 +7,9 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
     def __init__(self, buffer_size, batch_size, nstep, discount, frame_stack,
                  data_specs=None):
         self.buffer_size = buffer_size
-        self.data_dict = {}
         self.index = 0
         self.traj_index = 0
         self.frame_stack = frame_stack
-        self._recorded_frames = frame_stack + 1
         self.batch_size = batch_size
         self.nstep = nstep
         self.discount = discount
@@ -187,4 +185,3 @@ class EfficientReplayBuffer(AbstractReplayBuffer):
 
         ret = (obs, act, rew, dis, nobs)
         return ret
-

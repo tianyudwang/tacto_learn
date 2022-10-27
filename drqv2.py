@@ -293,8 +293,8 @@ class DrQV2Agent:
         
         # image shift augment
         if self.image_key is not None:
-            obs[image_key] = self.aug(obs[image_key].float())
-            next_obs[image_key] = self.aug(next_obs[image_key].float())
+            obs[self.image_key] = self.aug(obs[self.image_key].float())
+            next_obs[self.image_key] = self.aug(next_obs[self.image_key].float())
         
         # encode
         obs = self.encode_obs(obs)
