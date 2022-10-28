@@ -67,7 +67,7 @@ def train_policy(env, policy_cfg, exp_name):
 
     policy_name = osp.join(policy_path, exp_name)
     policy.save(policy_name)
-    return polic
+    return policy
 
 
 def parse_args():
