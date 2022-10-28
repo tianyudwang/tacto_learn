@@ -151,7 +151,8 @@ class Critic(nn.Module):
 class DrQV2Agent:
     def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
                  hidden_dim, critic_target_tau, num_expl_steps,
-                 update_every_steps, stddev_schedule, stddev_clip, use_tb):
+                 update_every_steps, stddev_schedule, stddev_clip, use_tb,
+                 frame_stack):
         self.device = device
         self.critic_target_tau = critic_target_tau
         self.update_every_steps = update_every_steps
@@ -165,12 +166,13 @@ class DrQV2Agent:
         self.image_key = None
         for k, shape in obs_shape.items():
             if k == 'agentview_image' or k == 'observation':
+                # Multiply channel with frame_stacks
                 self.encoders[k] = Encoder(shape).to(device)
                 self.image_key = k
             elif k == 'robot0_proprio-state':
-                self.encoders[k] = MLP(shape[0], out_dim=32).to(device)
+                self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
             elif k == 'object-state':
-                self.encoders[k] = MLP(shape[0], out_dim=32).to(device)
+                self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
             else:
                 raise ValueError(f'Encoder for {k} not implemented')
 

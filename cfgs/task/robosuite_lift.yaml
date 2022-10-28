@@ -10,7 +10,7 @@ replay_buffer_size: 1000000
 save_video: false
 save_train_video: false
 num_seed_frames: 4000
-nstep: 1
+nstep: 3
 
 
 # observation

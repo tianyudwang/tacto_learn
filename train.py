@@ -59,12 +59,8 @@ class Workspace:
     def setup(self):
         # create logger
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
+        
         # create envs
-        # self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-        #                           self.cfg.action_repeat, self.cfg.seed)
-        # self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-        #                          self.cfg.action_repeat, self.cfg.seed)
-
         obs_modes = self.cfg.observation_modes
 
         assert not(obs_modes.use_object_obs and obs_modes.use_camera_obs), (
@@ -109,12 +105,6 @@ class Workspace:
     @property
     def global_frame(self):
         return self.global_step * self.cfg.action_repeat
-
-    # @property
-    # def replay_iter(self):
-    #     if self._replay_iter is None:
-    #         self._replay_iter = iter(self.replay_loader)
-    #     return self._replay_iter
 
     def eval(self):
         step, episode, total_reward = 0, 0, 0
@@ -186,7 +176,6 @@ class Workspace:
                 episode_reward = 0
 
                 print(f"Available RAM: {psutil.virtual_memory().available / 1e9} GB")
-                print(f"Replay buffer size: {len(self.replay_buffer)}")
 
             # try to evaluate
             if eval_every_step(self.global_step):

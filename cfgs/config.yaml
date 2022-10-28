@@ -37,6 +37,7 @@ agent:
   _target_: drqv2.DrQV2Agent
   obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
+  frame_stack: ${frame_stack}
   device: ${device}
   lr: ${lr}
   critic_target_tau: 0.01

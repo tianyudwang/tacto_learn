@@ -35,9 +35,10 @@ class NStepReplayBuffer(AbstractReplayBuffer):
         for k, shape in self.obs_shapes.items():
             # images, assumes channel-first
             if len(shape) == 3:
-                assert shape[0] <= 5, "Image should be channel-first"
+                assert shape[0] <= 12, "Image should be channel-first"
                 c, h, w = shape
-                self.obs[k] = np.zeros([self.buffer_size, c, h, w], dtype=np.uint8)
+                self.im_channels = c // frame_stack
+                self.obs[k] = np.zeros([self.buffer_size, self.im_channels, h, w], dtype=np.uint8)
             # proprio/object state
             elif len(shape) == 1:
                 self.obs[k] = np.zeros([self.buffer_size, *shape], dtype=np.float32)
@@ -76,10 +77,14 @@ class NStepReplayBuffer(AbstractReplayBuffer):
     def _copy_obs_to_buffer(self, obs):
         """
         Copy observation into buffer at current index location
+        Only keep the image observation at current time step
         """
         assert isinstance(obs, dict), "Observation must be wrapped in a dictionary"
-        for k, v in obs.items():
-            self.obs[k][self.index] = v.copy()
+        for k, shape in self.obs_shapes.items():
+            if len(shape) == 3:
+                self.obs[k][self.index] = obs[k][-self.im_channels:].copy()
+            else:
+                self.obs[k][self.index] = obs[k].copy()
 
     def add(self, time_step):
 
@@ -117,7 +122,7 @@ class NStepReplayBuffer(AbstractReplayBuffer):
             # pad first image of trajectory
             indices = np.concatenate([
                 np.ones(self.frame_stack-self.traj_index-1, dtype=np.uint32) * (self.index-self.traj_index),
-                np.arange(self.index-self.traj_index, self.index, dtype=np.uint32)+1
+                np.arange(self.index-self.traj_index, self.index+1, dtype=np.uint32)
             ])
             assert indices.shape[0] == self.frame_stack
         self.frame_indices[self.index] = indices
@@ -164,8 +169,8 @@ class NStepReplayBuffer(AbstractReplayBuffer):
             if len(shape) == 3:
                 obs_frame_indices = self.frame_indices[indices-self.nstep]
                 nobs_frame_indices = self.frame_indices[indices]
-                obs[k] = self.obs[k][obs_frame_indices]
-                nobs[k] = self.obs[k][nobs_frame_indices]
+                obs[k] = self.obs[k][obs_frame_indices].reshape(n_samples, -1, shape[1], shape[2])
+                nobs[k] = self.obs[k][nobs_frame_indices].reshape(n_samples, -1, shape[1], shape[2])
             else:
                 obs[k] = self.obs[k][indices-self.nstep]
                 nobs[k] = self.obs[k][indices]
@@ -173,5 +178,4 @@ class NStepReplayBuffer(AbstractReplayBuffer):
         # TODO: implement discount
         dis = self.next_dis
 
-        import ipdb; ipdb.set_trace()
         return obs, act, rew, dis, nobs
