@@ -1,0 +1,11 @@
+defaults:
+  - medium
+  - _self_
+
+env:
+  env_name: PickPlaceCan
+
+# expert demo directory
+demo_dir: ./demonstrations/PickPlaceCan
+
+

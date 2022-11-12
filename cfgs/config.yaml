@@ -1,0 +1,90 @@
+defaults:
+  - _self_
+  - task: robosuite_lift
+  - override hydra/launcher: submitit_local
+
+# env config
+env:
+  env_name: Lift
+  robots: Panda
+  reward_shaping: true
+  has_renderer: false
+  has_offscreen_renderer: false
+  use_camera_obs: false
+  use_object_obs: false
+  use_touch_obs: false
+  camera_widths: 84
+  camera_heights: 84
+  horizon: 1000
+
+# expert demo directory
+demo_dir: ${demo_dir}
+
+# task setting
+frame_stack: 3
+discount: 0.99
+# train settings
+num_seed_frames: 4000
+# eval
+eval_every_frames: 10000
+num_eval_episodes: 8
+# snapshot
+save_snapshot: false
+# replay buffer
+demo_buffer_size: 10000
+replay_buffer_size: 1000000
+nstep: 3
+batch_size: 256
+# misc
+seed: 1
+device: cuda
+save_video: false
+save_train_video: false
+use_tb: true
+# experiment
+experiment: exp
+# agent
+lr: 1e-4
+feature_dim: 50
+
+agent:
+  _target_: drqv2.DrQV2Agent
+  obs_shape: ??? # to be specified later
+  action_shape: ??? # to be specified later
+  frame_stack: ${frame_stack}
+  device: ${device}
+  lr: ${lr}
+  critic_target_tau: 0.01
+  update_every_steps: 2
+  use_tb: ${use_tb}
+  num_expl_steps: 2000
+  hidden_dim: 1024
+  feature_dim: ${feature_dim}
+  stddev_schedule: ${stddev_schedule}
+  stddev_clip: 0.3
+
+discriminator:
+  _target_: discriminator.Discriminator
+  obs_shape: ??? # to be specified later
+  action_shape: ??? # to be specified later
+  device: ${device}
+  lr: 3e-6
+  batch_size: ${batch_size}
+  hidden_dim: 1024
+  max_logit: 10
+  reward_type: GAIL
+
+hydra:
+  run:
+    dir: ./exp_local/${now:%Y.%m.%d}/${now:%H%M%S}_${hydra.job.override_dirname}
+  sweep:
+    dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
+    subdir: ${hydra.job.num}
+  launcher:
+    timeout_min: 4300
+    cpus_per_task: 10
+    gpus_per_node: 1
+    tasks_per_node: 1
+    mem_gb: 32
+    nodes: 1
+    submitit_folder: ./exp/${now:%Y.%m.%d}/${now:%H%M%S}_${agent_cfg.experiment}/.slurm
