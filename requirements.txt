@@ -1,3 +1,9 @@
 hydra-core
+hydra-submitit-launcher
 dm-env
 ipdb
+h5py
+torch
+torchvision
+tensorboard
+opencv-python

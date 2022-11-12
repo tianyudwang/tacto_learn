@@ -102,7 +102,7 @@ class Workspace:
         return self._global_episode
 
     def fill_expert_buffer(self):
-        hdf5_path = os.path.join(self.cfg.demo_dir, "demo.hdf5")
+        hdf5_path = os.path.join(hydra.utils.to_absolute_path(self.cfg.demo_dir), "demo.hdf5")
         f = h5py.File(hdf5_path, "r")   
 
         env_name = f["data"].attrs["env"]
