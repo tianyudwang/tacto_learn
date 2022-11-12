@@ -75,16 +75,18 @@ discriminator:
   reward_type: GAIL
 
 hydra:
+  job:
+    chdir: true
   run:
     dir: ./exp_local/${now:%Y.%m.%d}/${now:%H%M%S}_${hydra.job.override_dirname}
-  sweep:
-    dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
-    subdir: ${hydra.job.num}
-  launcher:
-    timeout_min: 4300
-    cpus_per_task: 10
-    gpus_per_node: 1
-    tasks_per_node: 1
-    mem_gb: 32
-    nodes: 1
-    submitit_folder: ./exp/${now:%Y.%m.%d}/${now:%H%M%S}_${agent_cfg.experiment}/.slurm
+#   sweep:
+#     dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
+#     subdir: ${hydra.job.num}
+#   launcher:
+#     timeout_min: 4300
+#     cpus_per_task: 10
+#     gpus_per_node: 1
+#     tasks_per_node: 1
+#     mem_gb: 32
+#     nodes: 1
+#     submitit_folder: ./exp/${now:%Y.%m.%d}/${now:%H%M%S}_${agent_cfg.experiment}/.slurm
