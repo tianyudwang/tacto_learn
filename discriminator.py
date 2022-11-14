@@ -35,7 +35,11 @@ class Discriminator:
 
         # discriminator
         self.obs_encoder = FeatureExtractor(obs_shape, spectral_norm=spectral_norm).to(device)
-        self.disc = MLP(self.obs_encoder.feat_dim+action_shape[0], 1, spectral_norm=spectral_norm).to(device)
+        self.disc = MLP(
+            self.obs_encoder.feat_dim+action_shape[0], 
+            1, 
+            spectral_norm=spectral_norm
+        ).to(device)
 
         # optimizers
         self.disc_opt = torch.optim.Adam(

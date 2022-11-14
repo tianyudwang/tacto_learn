@@ -4,6 +4,17 @@ import torch.nn.utils.parametrizations as p
 
 import utils
 
+
+_str_to_activation = {
+    'relu': nn.ReLU(),
+    'tanh': nn.Tanh(),
+    'leaky_relu': nn.LeakyReLU(),
+    'sigmoid': nn.Sigmoid(),
+    'selu': nn.SELU(),
+    'softplus': nn.Softplus(),
+    'identity': nn.Identity(),
+}
+
 class Encoder(nn.Module):
     def __init__(self, obs_shape, spectral_norm=False):
         super().__init__()
@@ -49,10 +60,24 @@ class Encoder(nn.Module):
         return h
 
 class MLP(nn.Module):
-    def __init__(self, input_size, output_size, n_layers=2, size=256, spectral_norm=False):
+    def __init__(
+        self, 
+        input_size, 
+        output_size, 
+        n_layers=2, 
+        size=256, 
+        activation='relu',
+        output_activation='identity',
+        spectral_norm=False
+    ):
         super().__init__()
 
         self.feat_dim = output_size
+    
+        if isinstance(activation, str):
+            activation = _str_to_activation[activation]
+        if isinstance(output_activation, str):
+            output_activation = _str_to_activation[output_activation]
 
         layers = []
         in_size = input_size
@@ -61,13 +86,13 @@ class MLP(nn.Module):
             if spectral_norm:
                 layer = p.spectral_norm(layer)
             layers.append(layer)
-            layers.append(nn.ReLU(inplace=True))
+            layers.append(activation)
             in_size = size
         layer = nn.Linear(in_size, output_size)
         if spectral_norm:
             layer = p.spectral_norm(layer)
         layers.append(layer)
-        layers.append(nn.ReLU(inplace=True))
+        layers.append(output_activation)
 
         self.mlp = nn.Sequential(*layers)
 

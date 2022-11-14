@@ -67,7 +67,7 @@ discriminator:
   obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
   device: ${device}
-  lr: 3e-7
+  lr: 3e-5
   batch_size: ${batch_size}
   hidden_dim: 256
   max_logit: 10
