@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import utils
+from nn_models import Encoder, MLP, FeatureExtractor
 
 
 class RandomShiftsAug(nn.Module):
@@ -45,74 +46,25 @@ class RandomShiftsAug(nn.Module):
                              align_corners=False)
 
 
-class Encoder(nn.Module):
-    def __init__(self, obs_shape):
-        super().__init__()
-
-        assert len(obs_shape) == 3
-        self.repr_dim = 32 * 35 * 35
-        self.feat_dim = 50
-
-        self.convnet = nn.Sequential(nn.Conv2d(obs_shape[0], 32, 3, stride=2),
-                                     nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                     nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                     nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                     nn.ReLU())
-        self.fc = nn.Sequential(
-            nn.Linear(self.repr_dim, self.feat_dim),
-            nn.LayerNorm(self.feat_dim), 
-            nn.Tanh()
-        )
-        self.apply(utils.weight_init)
-
-    def forward(self, obs):
-        obs = obs / 255.0 - 0.5
-        h = self.convnet(obs)
-        h = h.view(h.shape[0], -1)
-        h = self.fc(h)
-        return h
-
-class MLP(nn.Module):
-    def __init__(self, in_dim, out_dim=128):
-        super().__init__()
-
-        self.feat_dim = out_dim
-
-        self.mlp = nn.Sequential(
-            nn.Linear(in_dim, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, out_dim),
-        )
-
-        self.apply(utils.weight_init)
-
-    def forward(self, x):
-        return self.mlp(x)
-
-
 class Actor(nn.Module):
-    def __init__(self, feature_dim, action_shape, hidden_dim):
+    def __init__(self, obs_shape, action_shape, hidden_dim):
         super().__init__()
 
-        # self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-        #                            nn.LayerNorm(feature_dim), nn.Tanh())
+        self.obs_encoder = FeatureExtractor(obs_shape)
 
-        self.policy = nn.Sequential(nn.Linear(feature_dim, hidden_dim),
-                                    nn.ReLU(inplace=True),
-                                    nn.Linear(hidden_dim, hidden_dim),
-                                    nn.ReLU(inplace=True),
-                                    nn.Linear(hidden_dim, action_shape[0]))
+        self.policy = nn.Sequential(
+            nn.Linear(self.obs_encoder.feat_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, action_shape[0])
+        )
 
         self.apply(utils.weight_init)
 
     def forward(self, obs, std):
-        # h = self.trunk(obs)
-
-        mu = self.policy(obs)
+        feat = self.obs_encoder(obs)
+        mu = self.policy(feat)
         mu = torch.tanh(mu)
         std = torch.ones_like(mu) * std
 
@@ -121,29 +73,29 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, feature_dim, action_shape, hidden_dim):
+    def __init__(self, obs_shape, action_shape, hidden_dim):
         super().__init__()
 
-        # self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-        #                            nn.LayerNorm(feature_dim), nn.Tanh())
+        self.obs_encoder = FeatureExtractor(obs_shape)
 
         self.Q1 = nn.Sequential(
-            nn.Linear(feature_dim + action_shape[0], hidden_dim),
+            nn.Linear(self.obs_encoder.feat_dim + action_shape[0], hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
 
         self.Q2 = nn.Sequential(
-            nn.Linear(feature_dim + action_shape[0], hidden_dim),
+            nn.Linear(self.obs_encoder.feat_dim + action_shape[0], hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
 
         self.apply(utils.weight_init)
 
+
     def forward(self, obs, action):
-        # h = self.trunk(obs)
-        h_action = torch.cat([obs, action], dim=-1)
-        q1 = self.Q1(h_action)
-        q2 = self.Q2(h_action)
+        feat = self.obs_encoder(obs)
+        feat_action = torch.cat([feat, action], dim=-1)
+        q1 = self.Q1(feat_action)
+        q2 = self.Q2(feat_action)
 
         return q1, q2
 
@@ -151,8 +103,7 @@ class Critic(nn.Module):
 class DrQV2Agent:
     def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
                  hidden_dim, critic_target_tau, num_expl_steps,
-                 update_every_steps, stddev_schedule, stddev_clip, use_tb,
-                 frame_stack):
+                 update_every_steps, stddev_schedule, stddev_clip, use_tb):
         self.device = device
         self.critic_target_tau = critic_target_tau
         self.update_every_steps = update_every_steps
@@ -161,35 +112,18 @@ class DrQV2Agent:
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
 
-        # construct observation encoders based on observation spec
-        self.encoders = {}
         self.image_key = None
-        for k, shape in obs_shape.items():
-            if k == 'agentview_image' or k == 'observation':
-                # Multiply channel with frame_stacks
-                self.encoders[k] = Encoder(shape).to(device)
+        for k in obs_shape.keys():
+            if "image" in k:
                 self.image_key = k
-            elif k == 'robot0_proprio-state':
-                self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
-            elif k == 'object-state':
-                self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
-            elif k =='robot0_touch-state':
-                self.encoders[k] = MLP(shape[0], out_dim=32).to(device)
-            else:
-                raise ValueError(f'Encoder for {k} not implemented')
-
-        encoder_feat_dim = sum([encoder.feat_dim for encoder in self.encoders.values()])
 
         # models
-        self.actor = Actor(encoder_feat_dim, action_shape, hidden_dim).to(device)
-        self.critic = Critic(encoder_feat_dim, action_shape, hidden_dim).to(device)
-        self.critic_target = Critic(encoder_feat_dim, action_shape, hidden_dim).to(device)
+        self.actor = Actor(obs_shape, action_shape, hidden_dim).to(device)
+        self.critic = Critic(obs_shape, action_shape, hidden_dim).to(device)
+        self.critic_target = Critic(obs_shape, action_shape, hidden_dim).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
-        self.encoder_opts = {}
-        for k, v in self.encoders.items():
-            self.encoder_opts[k] = torch.optim.Adam(self.encoders[k].parameters(), lr=lr)
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=lr)
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=lr)
 
@@ -199,32 +133,25 @@ class DrQV2Agent:
         self.train()
         self.critic_target.train()
 
+        self.disc_reward = None
+
     def set_disc_reward(self, reward_fn):
         self.disc_reward = reward_fn
 
     def train(self, training=True):
         self.training = training
-        for encoder in self.encoders.values():
-            encoder.train(training)
         self.actor.train(training)
         self.critic.train(training)
 
-    def encode_obs(self, obs):
-        assert isinstance(obs, dict), "Observation must be wrapped in dictionary"
-        obs_feats = []
-        for k, v in obs.items():
-            ob = torch.as_tensor(v, device=self.device)
-            # Add trivial batch dim during inference
+    def act(self, obs, step, eval_mode):
+        stddev = utils.schedule(self.stddev_schedule, step)
+        obs_new = {}
+        for k, ob in obs.items():
+            ob = torch.as_tensor(ob, device=self.device)
             if len(ob.shape) == 1 or len(ob.shape) == 3:
                 ob = ob.unsqueeze(0)
-            obs_feats.append(self.encoders[k](ob))
-        obs_feat = torch.cat(obs_feats, dim=-1)
-        return obs_feat
-
-    def act(self, obs, step, eval_mode):
-        obs = self.encode_obs(obs)
-        stddev = utils.schedule(self.stddev_schedule, step)
-        dist = self.actor(obs, stddev)
+            obs_new[k] = ob
+        dist = self.actor(obs_new, stddev)
         if eval_mode:
             action = dist.mean
         else:
@@ -254,13 +181,9 @@ class DrQV2Agent:
             metrics['critic_loss'] = critic_loss.item()
 
         # optimize encoder and critic
-        for encoder_opt in self.encoder_opts.values():
-            encoder_opt.zero_grad(set_to_none=True)
         self.critic_opt.zero_grad(set_to_none=True)
         critic_loss.backward()
         self.critic_opt.step()
-        for encoder_opt in self.encoder_opts.values():
-            encoder_opt.step()
 
         return metrics
 
@@ -297,6 +220,9 @@ class DrQV2Agent:
         batch = next(replay_iter)
         obs, action, reward, discount, next_obs = utils.to_torch(
             batch, self.device)
+        
+        if self.use_tb:
+            metrics['batch_reward'] = reward.mean().item()
 
         # image shift augment
         if self.image_key is not None:
@@ -308,21 +234,16 @@ class DrQV2Agent:
             if self.use_tb:
                 metrics['learned_reward'] = reward.mean().item()
 
-        # encode
-        obs = self.encode_obs(obs)
-        with torch.no_grad():
-            next_obs = self.encode_obs(next_obs)
-
-        if self.use_tb:
-            metrics['batch_reward'] = reward.mean().item()
-
+        # # encode
+        # obs = self.encode_obs(obs)
+        # with torch.no_grad():
+        #     next_obs = self.encode_obs(next_obs)
 
         # update critic
-        metrics.update(
-            self.update_critic(obs, action, reward, discount, next_obs, step))
+        metrics.update(self.update_critic(obs, action, reward, discount, next_obs, step))
 
         # update actor
-        metrics.update(self.update_actor(obs.detach(), step))
+        metrics.update(self.update_actor(obs, step))
 
         # update critic target
         utils.soft_update_params(self.critic, self.critic_target,

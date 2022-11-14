@@ -44,14 +44,13 @@ use_tb: true
 # experiment
 experiment: exp
 # agent
-lr: 1e-4
+lr: 3e-4
 feature_dim: 50
 
 agent:
   _target_: drqv2.DrQV2Agent
   obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
-  frame_stack: ${frame_stack}
   device: ${device}
   lr: ${lr}
   critic_target_tau: 0.01
@@ -68,11 +67,13 @@ discriminator:
   obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
   device: ${device}
-  lr: 3e-6
+  lr: 3e-7
   batch_size: ${batch_size}
-  hidden_dim: 1024
+  hidden_dim: 256
   max_logit: 10
   reward_type: GAIL
+  update_every_steps: 2
+  spectral_norm: true
 
 hydra:
   job:

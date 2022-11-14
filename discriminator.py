@@ -5,54 +5,8 @@ from torch import optim
 import torch.nn.utils.parametrizations as p
 
 import utils
+from nn_models import Encoder, MLP, FeatureExtractor
 
-class Encoder(nn.Module):
-    def __init__(self, obs_shape):
-        super().__init__()
-
-        assert len(obs_shape) == 3
-        self.repr_dim = 32 * 35 * 35
-        self.feat_dim = 50
-
-        self.convnet = nn.Sequential(nn.Conv2d(obs_shape[0], 32, 3, stride=2),
-                                     nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                     nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                     nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                     nn.ReLU())
-        self.fc = nn.Sequential(
-            nn.Linear(self.repr_dim, self.feat_dim),
-            nn.LayerNorm(self.feat_dim), 
-            nn.Tanh()
-        )
-        self.apply(utils.weight_init)
-
-    def forward(self, obs):
-        obs = obs / 255.0 - 0.5
-        h = self.convnet(obs)
-        h = h.view(h.shape[0], -1)
-        h = self.fc(h)
-        return h
-
-class MLP(nn.Module):
-    def __init__(self, in_dim, out_dim=128):
-        super().__init__()
-
-        self.feat_dim = out_dim
-
-        self.mlp = nn.Sequential(
-            nn.Linear(in_dim, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, out_dim),
-        )
-
-        self.apply(utils.weight_init)
-
-    def forward(self, x):
-        return self.mlp(x)
 
 class Discriminator:
     def __init__(
@@ -64,7 +18,9 @@ class Discriminator:
         batch_size,
         hidden_dim,
         max_logit,
-        reward_type
+        reward_type,
+        update_every_steps,
+        spectral_norm
         # clip_reward_range: Optional[float] = -1.0,
     ):
         # super().__init__()
@@ -73,41 +29,19 @@ class Discriminator:
         self.reward_type = reward_type
         self.max_logit = max_logit
         self.batch_size = batch_size
+        self.update_every_steps = update_every_steps
         # self.max_grad_norm = max_grad_norm
 
-        # construct observation encoders based on observation spec
-        self.encoders = {}
-        self.image_key = None
-        for k, shape in obs_shape.items():
-            if k == 'agentview_image' or k == 'observation':
-                # Multiply channel witorch frame_stacks
-                self.encoders[k] = Encoder(shape).to(device)
-                self.image_key = k
-            elif k == 'robot0_proprio-state':
-                self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
-            elif k == 'object-state':
-                self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
-            elif k =='robot0_touch-state':
-                self.encoders[k] = MLP(shape[0], out_dim=32).to(device)
-            else:
-                raise ValueError(f'Encoder for {k} not implemented')
 
-        encoder_feat_dim = sum([encoder.feat_dim for encoder in self.encoders.values()])
-
-        # models
-        self.model = nn.Sequential(
-            p.spectral_norm(nn.Linear(encoder_feat_dim+action_shape[0], hidden_dim)),
-            nn.ReLU(inplace=True),
-            p.spectral_norm(nn.Linear(hidden_dim, hidden_dim)),
-            nn.ReLU(inplace=True),
-            p.spectral_norm(nn.Linear(hidden_dim, 1)),
-        ).to(device)
+        # discriminator
+        self.obs_encoder = FeatureExtractor(obs_shape, spectral_norm=spectral_norm).to(device)
+        self.disc = MLP(self.obs_encoder.feat_dim+action_shape[0], 1, spectral_norm=spectral_norm).to(device)
 
         # optimizers
-        self.encoder_opts = {}
-        for k, v in self.encoders.items():
-            self.encoder_opts[k] = torch.optim.Adam(self.encoders[k].parameters(), lr=lr)
-        self.model_opt = torch.optim.Adam(self.model.parameters(), lr=lr)
+        self.disc_opt = torch.optim.Adam(
+            list(self.obs_encoder.parameters())+list(self.disc.parameters()), 
+            lr=lr
+        )
 
         self.sigmoid = nn.Sigmoid()
         # self.softplus = nn.Softplus()
@@ -118,21 +52,9 @@ class Discriminator:
         agent_labels = torch.ones((batch_size, 1), device=self.device) 
         self.labels = torch.cat((demo_labels, agent_labels), dim=0)
 
-    def encode_obs(self, obs):
-        assert isinstance(obs, dict), "Observation must be wrapped in dictionary"
-        obs_feats = []
-        for k, v in obs.items():
-            ob = torch.as_tensor(v, device=self.device)
-            # Add trivial batch dim during inference
-            if len(ob.shape) == 1 or len(ob.shape) == 3:
-                ob = ob.unsqueeze(0)
-            obs_feats.append(self.encoders[k](ob))
-        obs_feat = torch.cat(obs_feats, dim=-1)
-        return obs_feat
-
     def forward(self, obs, act):
-        obs = self.encode_obs(obs)
-        logits = self.model(torch.cat([obs, act], dim=-1))
+        feat = self.obs_encoder(obs)
+        logits = self.disc(torch.cat([feat, act], dim=-1))
         logits = torch.clamp(logits, -self.max_logit, self.max_logit)
         return logits
 
@@ -151,16 +73,18 @@ class Discriminator:
         return rewards
 
 
-    def update(self, replay_buffer, demo_buffer):  
+    def update(self, replay_buffer, demo_buffer, step):  
+
+        metrics = dict()
+
+        if step % self.update_every_steps != 0:
+            return metrics
 
         agent_batch = next(replay_buffer)
         agent_obs, agent_act, _, _, _ = utils.to_torch(agent_batch, self.device)
 
         demo_batch = next(demo_buffer)
         demo_obs, demo_act, _, _, _ = utils.to_torch(demo_batch, self.device)
-
-        # assert demo_states.dim() == 2
-        # assert demo_states.shape[0] == self.batch_size
 
         obs = dict()
         for k in demo_obs.keys():
@@ -172,19 +96,15 @@ class Discriminator:
         loss = self.loss(D, self.labels)
 
         # Backpropagation
-        for encoder_opt in self.encoder_opts.values():
-            encoder_opt.zero_grad(set_to_none=True)
-        self.model_opt.zero_grad(set_to_none=True)
+        self.disc_opt.zero_grad(set_to_none=True)
         loss.backward()        
 
         grad_norms = []
-        for p in list(filter(lambda p: p.grad is not None, self.model.parameters())):
+        for p in list(filter(lambda p: p.grad is not None, list(self.disc.parameters()) + list(self.obs_encoder.parameters()) )):
             grad_norms.append(p.grad.detach().data.norm(2))
         grad_norms = torch.stack(grad_norms)
 
-        self.model_opt.step()
-        for encoder_opt in self.encoder_opts.values():
-            encoder_opt.step()
+        self.disc_opt.step()
 
         # Log metrics
         demo_D, agent_D = D[:self.batch_size], D[self.batch_size:]

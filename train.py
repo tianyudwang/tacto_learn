@@ -145,9 +145,9 @@ class Workspace:
                     # ensure that the actions deterministically lead to the same recorded states
                     if j < num_actions - 1:
                         state_playback = demo_env.sim.get_state().flatten()
-                        if not np.all(np.equal(states[j + 1], state_playback)):
+                        if not np.allclose(states[j + 1], state_playback):
                             err = np.linalg.norm(states[j + 1] - state_playback)
-                            print(f"[warning] playback diverged by {err:.2f} for ep {ep} at step {j}")  
+                            print(f"[warning] playback diverged by {err:.6f} for ep {ep} at step {j}")  
                 else:
                     # use the last time_step to pad the episode
                     if j == self.cfg.env.horizon-1:
@@ -244,7 +244,7 @@ class Workspace:
                 metrics = self.agent.update(self.replay_buffer, self.global_step)
                 self.logger.log_metrics(metrics, self.global_step, ty='train_agent')
 
-                metrics = self.disc.update(self.replay_buffer, self.demo_buffer)
+                metrics = self.disc.update(self.replay_buffer, self.demo_buffer, self.global_step)
                 self.logger.log_metrics(metrics, self.global_step, ty='train_disc')
 
             # take env step

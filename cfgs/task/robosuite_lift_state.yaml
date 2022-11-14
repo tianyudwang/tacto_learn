@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+  - medium
+  - _self_
+
+env:
+  env_name: Lift
+  has_offscreen_renderer: false
+  use_camera_obs: false
+  use_object_obs: true
+
+# expert demo directory
+demo_dir: ./demonstrations/Lift
