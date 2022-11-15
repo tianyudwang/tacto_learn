@@ -137,11 +137,14 @@ class Workspace:
 
             assert num_actions <= self.cfg.env.horizon, f"Demonstration length {num_actions} longer than env horizon {self.cfg.env.horizon}"
 
+            rew = []
             for j in range(self.cfg.env.horizon):
+                # demo_env.render()
                 if j < num_actions:
                     action = actions[j]
                     time_step = demo_env.step(action)
                     self.demo_buffer.add(time_step)  
+                    rew.append(time_step.reward)
 
                     # ensure that the actions deterministically lead to the same recorded states
                     if j < num_actions - 1:
@@ -151,9 +154,16 @@ class Workspace:
                             print(f"[warning] playback diverged by {err:.6f} for ep {ep} at step {j}")  
                 else:
                     # use the last time_step to pad the episode
-                    if j == self.cfg.env.horizon-1:
-                        time_step = time_step._replace(step_type=StepType.LAST)
+                    # if j == self.cfg.env.horizon-1:
+                    #     time_step = time_step._replace(step_type=StepType.LAST)
+                    
+                    # null action to pad the episode
+                    # change in position and orientation is 0, and grasp is 1
+                    action = np.array([0, 0, 0, 0, 0, 0, 1], dtype=np.float32)
+                    time_step = demo_env.step(action)
                     self.demo_buffer.add(time_step)
+                    rew.append(time_step.reward)
+            print(f"Current episode return: {np.sum(rew)}")
             print(f"Demo buffer contains {len(self.demo_buffer)} samples")
 
     def eval(self):

@@ -44,6 +44,7 @@ def collect_human_trajectory(env, device, arm, env_configuration):
     device.start_control()
 
     # Loop until we get a reset from the input or the task completes
+    steps = 0
     while True:
         # Set active robot
         active_robot = env.robots[0] if env_configuration == "bimanual" else env.robots[arm == "left"]
@@ -52,6 +53,9 @@ def collect_human_trajectory(env, device, arm, env_configuration):
         action, grasp = input2action(
             device=device, robot=active_robot, active_arm=arm, env_configuration=env_configuration
         )
+        # clip action range
+        action = np.clip(action, -1, 1)
+
 
         # If action is none, then this a reset so we should break
         if action is None:
@@ -60,6 +64,10 @@ def collect_human_trajectory(env, device, arm, env_configuration):
         # Run environment step
         env.step(action)
         env.render()
+        steps += 1
+
+        # Slow down simulation to reduce number of inactive steps
+        time.sleep(0.2)
 
         # Also break if we complete the task
         if task_completion_hold_count == 0:
@@ -76,6 +84,7 @@ def collect_human_trajectory(env, device, arm, env_configuration):
 
     # cleanup for end of data collection episodes
     env.close()
+    print(f"Episode length {steps}")
 
 
 def gather_demonstrations_as_hdf5(directory, out_dir, env_info):
