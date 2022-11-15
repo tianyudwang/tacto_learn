@@ -34,16 +34,16 @@ class Discriminator:
 
 
         # discriminator
-        self.obs_encoder = FeatureExtractor(obs_shape, spectral_norm=spectral_norm).to(device)
+        self.encoder = FeatureExtractor(obs_shape, spectral_norm=spectral_norm).to(device)
         self.disc = MLP(
-            self.obs_encoder.feat_dim+action_shape[0], 
+            self.encoder.feat_dim+action_shape[0], 
             1, 
             spectral_norm=spectral_norm
         ).to(device)
 
         # optimizers
         self.disc_opt = torch.optim.Adam(
-            list(self.obs_encoder.parameters())+list(self.disc.parameters()), 
+            list(self.encoder.parameters())+list(self.disc.parameters()), 
             lr=lr
         )
 
@@ -57,7 +57,7 @@ class Discriminator:
         self.labels = torch.cat((demo_labels, agent_labels), dim=0)
 
     def forward(self, obs, act):
-        feat = self.obs_encoder(obs)
+        feat = self.encoder(obs)
         logits = self.disc(torch.cat([feat, act], dim=-1))
         logits = torch.clamp(logits, -self.max_logit, self.max_logit)
         return logits
@@ -104,7 +104,7 @@ class Discriminator:
         loss.backward()        
 
         grad_norms = []
-        for p in list(filter(lambda p: p.grad is not None, list(self.disc.parameters()) + list(self.obs_encoder.parameters()) )):
+        for p in list(filter(lambda p: p.grad is not None, list(self.disc.parameters()) + list(self.encoder.parameters()) )):
             grad_norms.append(p.grad.detach().data.norm(2))
         grad_norms = torch.stack(grad_norms)
 

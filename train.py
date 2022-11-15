@@ -52,6 +52,8 @@ class Workspace:
         self.agent = hydra.utils.instantiate(self.cfg.agent)
         self.disc = hydra.utils.instantiate(self.cfg.discriminator)
 
+        self.fill_expert_buffer()
+
         self.timer = utils.Timer()
         self._global_step = 0
         self._global_episode = 0
@@ -91,7 +93,6 @@ class Workspace:
         self.train_video_recorder = TrainVideoRecorder(
             self.work_dir if self.cfg.save_train_video else None)
 
-        self.fill_expert_buffer()
 
     @property
     def global_step(self):
