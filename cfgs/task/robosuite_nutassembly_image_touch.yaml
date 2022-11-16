@@ -2,7 +2,7 @@ defaults:
   - medium
   - _self_
 
-task_name: Lift
+task_name: NutAssemblyRound
 # action repeat is not a parameter in robosuite
 # maybe we can set control_freq but not necessary
 action_repeat: 1          
@@ -20,6 +20,6 @@ observation_modes:
   use_object_obs: false
   use_camera_obs: true
   # Use tactile sensors
-  use_touch_obs: false
+  use_touch_obs: true
   use_tactile_obs: false
 

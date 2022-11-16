@@ -44,7 +44,7 @@ class Workspace:
         print(f'workspace: {self.work_dir}')
 
         self.cfg = cfg
-        print(cfg)
+        print(self.cfg)
         utils.set_seed_everywhere(cfg.seed)
         self.device = torch.device(cfg.device)
         self.setup()

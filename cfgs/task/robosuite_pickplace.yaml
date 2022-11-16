@@ -2,7 +2,7 @@ defaults:
   - medium
   - _self_
 
-task_name: Lift
+task_name: PickPlaceCan
 # action repeat is not a parameter in robosuite
 # maybe we can set control_freq but not necessary
 action_repeat: 1          

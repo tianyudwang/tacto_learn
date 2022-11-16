@@ -173,6 +173,8 @@ class DrQV2Agent:
                 self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
             elif k == 'object-state':
                 self.encoders[k] = MLP(shape[0], out_dim=64).to(device)
+            elif k =='robot0_touch-state':
+                self.encoders[k] = MLP(shape[0], out_dim=32).to(device)
             else:
                 raise ValueError(f'Encoder for {k} not implemented')
 

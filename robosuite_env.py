@@ -110,75 +110,6 @@ class DMEWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-# class ObsWrapper(dm_env.Environment):
-#     """
-#     Cast image observation type to np.uint8 and shape to channel-first
-#     Cast vector observation type to np.float32
-#     """
-#     def __init__(self, env):
-#         self._env = env
-
-#         wrapped_obs_spec = env.observation_spec()
-#         assert isinstance(wrapped_obs_spec, dict), "Observation must be wrapped in a dictionary"
-
-#         self._keys = list(wrapped_obs_spec.keys())
-#         self._obs_spec = OrderedDict()
-#         self._image_key = None
-#         for k, spec in wrapped_obs_spec.items():
-#             if len(spec.shape) == 3:
-#                 self._image_key = k
-#                 image_shape = spec.shape
-                
-#                 # Check if image is channel-first
-#                 if image_shape[0] <= 5:
-#                     self._is_channel_first = True
-#                     c, h, w = image_shape 
-#                 else:
-#                     self._is_channel_first = False
-#                     h, w, c = image_shape
-
-#                 self._image_spec = specs.BoundedArray(
-#                     shape=np.array([c, h, w]),
-#                     dtype=np.uint8,
-#                     minimum=0,
-#                     maximum=255,
-#                     name=k
-#                 )
-#                 self._obs_spec[k] = self._image_spec
-#             elif len(spec.shape) == 1:
-#                 self._obs_spec[k] = spec.replace(dtype=np.float32)
-#             else:
-#                 raise ValueError(f"Observation {k} has invalid shape {spec.shape}")
-
-#     def _transform_observation(self, time_step):
-#         """
-#         Make images channel-first and cast type for vector
-#         """
-#         ob = time_step.observation
-#         for k, v in ob.items():
-#             if k == self._image_key:
-#                 ob[k] = v.transpose(2, 0, 1).copy()
-#             else:
-#                 ob[k] = v.astype(np.float32)
-#         return time_step._replace(observation=ob)
-
-#     def reset(self):
-#         time_step = self._env.reset()
-#         return self._transform_observation(time_step)
-
-#     def step(self, action):
-#         time_step = self._env.step(action)
-#         return self._transform_observation(time_step)
-
-#     def observation_spec(self):
-#         return self._obs_spec
-
-#     def action_spec(self):
-#         return self._env.action_spec()
-
-#     def __getattr__(self, name):
-#         return getattr(self._env, name)
-
 class FrameStackWrapper(dm_env.Environment):
     """
     Frame stack and make channel first for image observations
@@ -310,13 +241,14 @@ def make(env_cfg, frame_stack):
     has_offscreen_renderer = True if env_cfg['use_camera_obs'] else False
 
     env = suite.make(
-        env_name="Lift", # try with other tasks like "Stack" and "Door"
+        env_name=env_cfg['env_name'], # try with other tasks like "Stack" and "Door"
         robots="Panda",  # try with other robots like "Sawyer" and "Jaco"
         reward_shaping=True, 
         has_renderer=False,
         has_offscreen_renderer=has_offscreen_renderer,
         use_camera_obs=env_cfg['use_camera_obs'],
         use_object_obs=env_cfg['use_object_obs'],
+        use_touch_obs=env_cfg['use_touch_obs'],
         camera_heights=84,
         camera_widths=84,
         controller_configs=controller_configs
@@ -329,11 +261,12 @@ def make(env_cfg, frame_stack):
         obs_keys.append('agentview_image')
     if env_cfg['use_object_obs']:
         obs_keys.append('object-state')
+    if env_cfg['use_touch_obs']:
+        obs_keys.append('robot0_touch-state')
     # TODO: Add other observation keys, e.g. tactile/touch
 
     # add wrappers
     env = DMEWrapper(env, obs_keys)
     env = FrameStackWrapper(env, frame_stack)
-    # env = ObsWrapper(env)
     env = ExtendedTimeStepWrapper(env)
     return env
