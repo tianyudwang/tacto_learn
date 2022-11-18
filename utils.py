@@ -129,6 +129,26 @@ class TruncatedNormal(pyd.Normal):
         x = self.loc + eps
         return self._clamp(x)
 
+class TanhNormal(pyd.Normal):
+    """
+    Normal distribution followed by a tanh
+    """
+    def __init__(self, loc, scale, eps=1e-6):
+        super().__init__(loc, scale)
+
+        self.eps = eps
+
+    def sample(self):
+        self.gaussian_action = super().rsample()
+        return torch.tanh(self.gaussian_action)
+
+    def log_prob(self, action):
+        log_prob = super().log_prob(self.gaussian_action).sum(dim=1)
+        # Squash correction (from original SAC implementation)
+        # this comes from the fact that tanh is bijective and differentiable
+        log_prob -= torch.sum(torch.log(1 - action**2 + self.eps), dim=1)
+        return log_prob
+
 
 def schedule(schdl, step):
     try:

@@ -34,10 +34,18 @@ class Discriminator:
 
 
         # discriminator
-        self.encoder = FeatureExtractor(obs_shape, spectral_norm=spectral_norm).to(device)
+        self.encoder = FeatureExtractor(
+            obs_shape, 
+            activation='leaky_relu',
+            output_activation='tanh',
+            spectral_norm=spectral_norm
+        ).to(device)
+
         self.disc = MLP(
             self.encoder.feat_dim+action_shape[0], 
-            1, 
+            1,
+            activation='leaky_relu', 
+            output_activation='identity',
             spectral_norm=spectral_norm
         ).to(device)
 

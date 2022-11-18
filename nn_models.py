@@ -103,21 +103,58 @@ class MLP(nn.Module):
 
 
 class FeatureExtractor(nn.Module):
-    def __init__(self, obs_shape, spectral_norm=False):
+    def __init__(
+        self, 
+        obs_shape, 
+        activation='relu', 
+        output_activation='tanh', 
+        spectral_norm=False
+    ):
         super().__init__()        
 
         self.encoders = nn.ModuleDict()
         for k, shape in obs_shape.items():
             if k == 'agentview_image' or k == 'observation':
                 # Multiply channel with frame_stacks
-                self.encoders[k] = Encoder(shape, spectral_norm=spectral_norm)
+                self.encoders[k] = Encoder(
+                    shape, 
+                    activation=activation,
+                    output_activation=output_activation,
+                    spectral_norm=spectral_norm
+                )
                 self.image_key = k
             elif k == 'robot0_proprio-state':
-                self.encoders[k] = MLP(shape[0], 64, spectral_norm=spectral_norm)
+                self.encoders[k] = MLP(
+                    shape[0], 
+                    64, 
+                    activation=activation, 
+                    output_activation=output_activation,
+                    spectral_norm=spectral_norm
+                )
             elif k == 'object-state':
-                self.encoders[k] = MLP(shape[0], 64, spectral_norm=spectral_norm)
+                self.encoders[k] = MLP(
+                    shape[0], 
+                    64, 
+                    activation=activation, 
+                    output_activation=output_activation,
+                    spectral_norm=spectral_norm
+                )
             elif k =='robot0_touch-state':
-                self.encoders[k] = MLP(shape[0], 32, spectral_norm=spectral_norm)
+                self.encoders[k] = MLP(
+                    shape[0], 
+                    32, 
+                    activation=activation,
+                    output_activation=output_activation, 
+                    spectral_norm=spectral_norm
+                )
+            elif k in ['position', 'velocity']:
+                self.encoders[k] = MLP(
+                    shape[0], 
+                    32, 
+                    activation=activation,
+                    output_activation=output_activation, 
+                    spectral_norm=spectral_norm
+                )
             else:
                 raise ValueError(f'Encoder for {k} not implemented')
 

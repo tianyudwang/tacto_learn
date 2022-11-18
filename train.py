@@ -52,7 +52,7 @@ class Workspace:
         self.agent = hydra.utils.instantiate(self.cfg.agent)
         self.disc = hydra.utils.instantiate(self.cfg.discriminator)
 
-        self.fill_expert_buffer()
+        # self.fill_expert_buffer()
 
         self.timer = utils.Timer()
         self._global_step = 0
@@ -113,7 +113,7 @@ class Workspace:
         demo_env = rbe.make(self.cfg.env, self.cfg.frame_stack)
 
         demos = list(f["data"].keys())
-        for ep in demos:
+        for ep in demos[:1]:
             # read the model xml, using the metadata stored in the attribute for this episode
             model_xml = f["data/{}".format(ep)].attrs["model_file"]
 
@@ -139,7 +139,6 @@ class Workspace:
 
             rew = []
             for j in range(self.cfg.env.horizon):
-                # demo_env.render()
                 if j < num_actions:
                     action = actions[j]
                     time_step = demo_env.step(action)
@@ -157,13 +156,13 @@ class Workspace:
                     # if j == self.cfg.env.horizon-1:
                     #     time_step = time_step._replace(step_type=StepType.LAST)
                     
-                    # null action to pad the episode
+                    # TODO: null action to pad the episode depends on the task
                     # change in position and orientation is 0, and grasp is 1
                     action = np.array([0, 0, 0, 0, 0, 0, 1], dtype=np.float32)
                     time_step = demo_env.step(action)
                     self.demo_buffer.add(time_step)
                     rew.append(time_step.reward)
-            print(f"Current episode return: {np.sum(rew)}")
+            print(f"Current episode return: {np.sum(rew):.2f}")
             print(f"Demo buffer contains {len(self.demo_buffer)} samples")
 
     def eval(self):
@@ -251,12 +250,12 @@ class Workspace:
             if not seed_until_step(self.global_step):
 
                 # Train policy with reward from discriminator
-                self.agent.set_disc_reward(self.disc.reward)
+                # self.agent.set_disc_reward(self.disc.reward)
                 metrics = self.agent.update(self.replay_buffer, self.global_step)
                 self.logger.log_metrics(metrics, self.global_step, ty='train_agent')
 
-                metrics = self.disc.update(self.replay_buffer, self.demo_buffer, self.global_step)
-                self.logger.log_metrics(metrics, self.global_step, ty='train_disc')
+                # metrics = self.disc.update(self.replay_buffer, self.demo_buffer, self.global_step)
+                # self.logger.log_metrics(metrics, self.global_step, ty='train_disc')
 
             # take env step
             time_step = self.train_env.step(action)
