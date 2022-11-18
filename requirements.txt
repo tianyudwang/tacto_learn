@@ -7,3 +7,5 @@ torch
 torchvision
 tensorboard
 opencv-python
+termcolor
+psutil
