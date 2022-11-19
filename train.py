@@ -52,7 +52,7 @@ class Workspace:
         self.agent = hydra.utils.instantiate(self.cfg.agent)
         self.disc = hydra.utils.instantiate(self.cfg.discriminator)
 
-        # self.fill_expert_buffer()
+        self.fill_expert_buffer()
 
         self.timer = utils.Timer()
         self._global_step = 0
@@ -250,12 +250,12 @@ class Workspace:
             if not seed_until_step(self.global_step):
 
                 # Train policy with reward from discriminator
-                # self.agent.set_disc_reward(self.disc.reward)
+                self.agent.set_disc_reward(self.disc.reward)
                 metrics = self.agent.update(self.replay_buffer, self.global_step)
                 self.logger.log_metrics(metrics, self.global_step, ty='train_agent')
 
-                # metrics = self.disc.update(self.replay_buffer, self.demo_buffer, self.global_step)
-                # self.logger.log_metrics(metrics, self.global_step, ty='train_disc')
+                metrics = self.disc.update(self.replay_buffer, self.demo_buffer, self.global_step)
+                self.logger.log_metrics(metrics, self.global_step, ty='train_disc')
 
             # take env step
             time_step = self.train_env.step(action)
