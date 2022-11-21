@@ -8,7 +8,7 @@ import utils
 _str_to_activation = {
     'relu': nn.ReLU(),
     'tanh': nn.Tanh(),
-    'leaky_relu': nn.LeakyReLU(),
+    'leaky_relu': nn.LeakyReLU(0.2, inplace=True),
     'sigmoid': nn.Sigmoid(),
     'selu': nn.SELU(),
     'softplus': nn.Softplus(),
@@ -58,6 +58,55 @@ class Encoder(nn.Module):
         h = h.view(h.shape[0], -1)
         h = self.fc(h)
         return h
+
+
+class DCEncoder(nn.Module):
+    def __init__(self, obs_shape):
+        super().__init__()
+
+        assert len(obs_shape) == 3
+        self.repr_dim = 256 * 5 * 5
+        self.feat_dim = 512
+
+        ndf = 32
+
+        self.convnet = nn.Sequential(
+            # input is (nc) x 64 x 64
+            nn.Conv2d(obs_shape[0], ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # # state size. (ndf*8) x 4 x 4
+            # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            # nn.Sigmoid()
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(self.repr_dim, self.feat_dim),
+            nn.LeakyReLU(0.2, inplace=True), 
+            nn.Linear(self.feat_dim, self.feat_dim),
+            nn.LeakyReLU(0.2, inplace=True), 
+        )
+
+        self.apply(utils.weight_init)
+
+    def forward(self, obs):
+        obs = obs / 255.0 - 0.5
+        h = self.convnet(obs)
+        h = h.view(h.shape[0], -1)
+        h = self.fc(h)
+        return h
+
 
 class MLP(nn.Module):
     def __init__(
@@ -116,12 +165,13 @@ class FeatureExtractor(nn.Module):
         for k, shape in obs_shape.items():
             if k == 'agentview_image' or k == 'observation':
                 # Multiply channel with frame_stacks
-                self.encoders[k] = Encoder(
-                    shape, 
-                    activation=activation,
-                    output_activation=output_activation,
-                    spectral_norm=spectral_norm
-                )
+                # self.encoders[k] = Encoder(
+                #     shape, 
+                #     activation=activation,
+                #     output_activation=output_activation,
+                #     spectral_norm=spectral_norm
+                # )
+                self.encoders[k] = DCEncoder(shape)
                 self.image_key = k
             elif k == 'robot0_proprio-state':
                 self.encoders[k] = MLP(

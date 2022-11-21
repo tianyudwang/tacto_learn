@@ -144,6 +144,7 @@ class DrQV2Agent:
 
     def train(self, training=True):
         self.training = training
+        self.encoder.train(training)
         self.actor.train(training)
         self.critic.train(training)
 

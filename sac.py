@@ -95,10 +95,15 @@ class SACAgent:
         self.train()
         self.critic_target.train()
 
+        self.disc_reward = None
+
     def train(self, training=True):
         self.training = training
         self.actor.train(training)
         self.critic.train(training)
+
+    def set_disc_reward(self, reward_fn):
+        self.disc_reward = reward_fn
 
     def act(self, obs, step, eval_mode):
         for k, ob in obs.items():
@@ -195,6 +200,10 @@ class SACAgent:
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
 
+        if self.disc_reward is not None:
+            reward = self.disc_reward(obs, action)
+            if self.use_tb:
+                metrics['learned_reward'] = reward.mean().item()
 
         # update critic
         metrics.update(self.update_critic(obs, action, reward, discount, next_obs))

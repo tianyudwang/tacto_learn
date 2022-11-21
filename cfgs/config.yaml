@@ -31,7 +31,7 @@ num_eval_episodes: 8
 # snapshot
 save_snapshot: false
 # replay buffer
-demo_buffer_size: 10000
+demo_buffer_size: 100000
 replay_buffer_size: 1000000
 nstep: 1
 batch_size: 256
@@ -47,32 +47,32 @@ experiment: exp
 lr: 3e-4
 feature_dim: 50
 
-# agent:
-#   _target_: drqv2.DrQV2Agent
-#   obs_shape: ??? # to be specified later
-#   action_shape: ??? # to be specified later
-#   device: ${device}
-#   lr: ${lr}
-#   critic_target_tau: 0.01
-#   update_every_steps: 2
-#   use_tb: ${use_tb}
-#   num_expl_steps: 2000
-#   hidden_dim: 1024
-#   feature_dim: ${feature_dim}
-#   stddev_schedule: ${stddev_schedule}
-#   stddev_clip: 0.3
-
 agent:
-  _target_: sac.SACAgent
+  _target_: drqv2.DrQV2Agent
   obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
   device: ${device}
   lr: ${lr}
-  hidden_dim: 256
   critic_target_tau: 0.01
   update_every_steps: 2
   use_tb: ${use_tb}
   num_expl_steps: 2000
+  hidden_dim: 1024
+  feature_dim: ${feature_dim}
+  stddev_schedule: ${stddev_schedule}
+  stddev_clip: 0.3
+
+# agent:
+#   _target_: sac.SACAgent
+#   obs_shape: ??? # to be specified later
+#   action_shape: ??? # to be specified later
+#   device: ${device}
+#   lr: ${lr}
+#   hidden_dim: 256
+#   critic_target_tau: 0.01
+#   update_every_steps: 2
+#   use_tb: ${use_tb}
+#   num_expl_steps: 2000
 
 discriminator:
   _target_: discriminator.Discriminator

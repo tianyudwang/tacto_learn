@@ -113,7 +113,7 @@ class Workspace:
         demo_env = rbe.make(self.cfg.env, self.cfg.frame_stack)
 
         demos = list(f["data"].keys())
-        for ep in demos[:1]:
+        for ep in demos:
             # read the model xml, using the metadata stored in the attribute for this episode
             model_xml = f["data/{}".format(ep)].attrs["model_file"]
 

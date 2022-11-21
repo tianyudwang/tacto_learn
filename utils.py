@@ -60,11 +60,18 @@ def weight_init(m):
         nn.init.orthogonal_(m.weight.data)
         if hasattr(m.bias, 'data'):
             m.bias.data.fill_(0.0)
-    elif isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
-        gain = nn.init.calculate_gain('relu')
-        nn.init.orthogonal_(m.weight.data, gain)
-        if hasattr(m.bias, 'data'):
-            m.bias.data.fill_(0.0)
+    # elif isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+    #     gain = nn.init.calculate_gain('relu')
+    #     nn.init.orthogonal_(m.weight.data, gain)
+    #     if hasattr(m.bias, 'data'):
+    #         m.bias.data.fill_(0.0)
+
+    elif isinstance(m, nn.Conv2d):
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif isinstance(m, nn.BatchNorm2d):
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+
 
 
 class Until:
