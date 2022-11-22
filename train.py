@@ -52,18 +52,20 @@ class Workspace:
         self.agent = hydra.utils.instantiate(self.cfg.agent)
         self.disc = hydra.utils.instantiate(self.cfg.discriminator)
 
-        self.fill_expert_buffer()
+        # self.fill_expert_buffer()
 
         self.timer = utils.Timer()
         self._global_step = 0
         self._global_episode = 0
+        self._current_best_reward = 0
 
     def setup(self):
         # create logger
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
 
-        self.train_env = rbe.make(self.cfg.env, self.cfg.frame_stack)
-        self.eval_env = rbe.make(self.cfg.env, self.cfg.frame_stack)
+        self.train_env = rbe.make(self.cfg.env, self.cfg.frame_stack, self.cfg.action_repeat)
+        self.eval_env = rbe.make(self.cfg.env, self.cfg.frame_stack, self.cfg.action_repeat)
+
 
         # create replay buffer
         data_specs = (self.train_env.observation_spec(),
@@ -92,6 +94,8 @@ class Workspace:
             self.work_dir if self.cfg.save_video else None)
         self.train_video_recorder = TrainVideoRecorder(
             self.work_dir if self.cfg.save_train_video else None)
+        
+        Path(os.path.join(self.work_dir), "checkpoints").mkdir(parents=True, exist_ok=True)
 
 
     @property
@@ -101,6 +105,10 @@ class Workspace:
     @property
     def global_episode(self):
         return self._global_episode
+
+    @property
+    def global_frame(self):
+        return self.global_step * self.cfg.action_repeat
 
     def fill_expert_buffer(self):
         hdf5_path = os.path.join(hydra.utils.to_absolute_path(self.cfg.demo_dir), "demo.hdf5")
@@ -183,19 +191,30 @@ class Workspace:
                 step += 1
 
             episode += 1
-            self.video_recorder.save(f'{self.global_step}.mp4')
+            self.video_recorder.save(f'{self.global_frame}.mp4')
 
-        with self.logger.log_and_dump_ctx(self.global_step, ty='eval') as log:
+        with self.logger.log_and_dump_ctx(self.global_frame, ty='eval') as log:
             log('episode_reward', total_reward / episode)
-            log('episode_length', step / episode)
+            log('episode_length', step * self.cfg.action_repeat / episode)
             log('episode', self.global_episode)
             log('step', self.global_step)
 
+
+        # save policy model
+        if total_reward / episode > self._current_best_reward:
+            self._current_best_reward = total_reward / episode
+            filename = os.path.join(self.work_dir, "checkpoints", f"{self.global_frame:07d}.pt")
+            print(f"Saving model at {filename}")
+            self.agent.save(filename)
+
     def train(self):
         # predicates
-        train_until_step = utils.Until(self.cfg.num_train_frames)
-        seed_until_step = utils.Until(self.cfg.num_seed_frames)
-        eval_every_step = utils.Every(self.cfg.eval_every_frames)
+        train_until_step = utils.Until(self.cfg.num_train_frames,
+                                       self.cfg.action_repeat)
+        seed_until_step = utils.Until(self.cfg.num_seed_frames,
+                                      self.cfg.action_repeat)
+        eval_every_step = utils.Every(self.cfg.eval_every_frames,
+                                      self.cfg.action_repeat)
 
         episode_step, episode_reward = 0, 0
         time_step = self.train_env.reset()
@@ -206,13 +225,13 @@ class Workspace:
         while train_until_step(self.global_step):
             if time_step.last():
                 self._global_episode += 1
-                self.train_video_recorder.save(f'{self.global_step}.mp4')
+                self.train_video_recorder.save(f'{self.global_frame}.mp4')
                 # wait until all the metrics schema is populated
                 if metrics is not None:
                     # log stats
                     elapsed_time, total_time = self.timer.reset()
-                    episode_frame = episode_step
-                    with self.logger.log_and_dump_ctx(self.global_step,
+                    episode_frame = episode_step * self.cfg.action_repeat
+                    with self.logger.log_and_dump_ctx(self.global_frame,
                                                       ty='train') as log:
                         log('fps', episode_frame / elapsed_time)
                         log('total_time', total_time)
@@ -237,7 +256,7 @@ class Workspace:
             # try to evaluate
             if eval_every_step(self.global_step):
                 self.logger.log('eval_total_time', self.timer.total_time(),
-                                self.global_step)
+                                self.global_frame)
                 self.eval()
 
             # sample action
@@ -250,12 +269,12 @@ class Workspace:
             if not seed_until_step(self.global_step):
 
                 # Train policy with reward from discriminator
-                self.agent.set_disc_reward(self.disc.reward)
+                # self.agent.set_disc_reward(self.disc.reward)
                 metrics = self.agent.update(self.replay_buffer, self.global_step)
-                self.logger.log_metrics(metrics, self.global_step, ty='train_agent')
+                self.logger.log_metrics(metrics, self.global_frame, ty='train_agent')
 
-                metrics = self.disc.update(self.replay_buffer, self.demo_buffer, self.global_step)
-                self.logger.log_metrics(metrics, self.global_step, ty='train_disc')
+                # metrics = self.disc.update(self.replay_buffer, self.demo_buffer, self.global_step)
+                # self.logger.log_metrics(metrics, self.global_step, ty='train_disc')
 
             # take env step
             time_step = self.train_env.step(action)

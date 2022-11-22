@@ -344,7 +344,7 @@ class ObsDTypeWrapper(dm_env.Environment):
     def __getattr__(self, name):
         return getattr(self._env, name)
 
-def make(env_cfg, frame_stack):
+def make(env_cfg, frame_stack, action_repeat):
 
     # if env_cfg.name in ['cheetah_run']:
     #     from dm_control import suite
@@ -384,6 +384,7 @@ def make(env_cfg, frame_stack):
 
     # add wrappers
     env = DMEWrapper(env, obs_keys)
+    env = ActionRepeatWrapper(env, action_repeat)
     env = FrameStackWrapper(env, frame_stack)
     env = ExtendedTimeStepWrapper(env)
     return env

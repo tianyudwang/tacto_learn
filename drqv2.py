@@ -148,6 +148,20 @@ class DrQV2Agent:
         self.actor.train(training)
         self.critic.train(training)
 
+    def load(self, filename):
+        checkpoint = torch.load(filename)
+        self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
+        self.actor.load_state_dict(checkpoint['actor_state_dict'])
+        self.critic.load_state_dict(checkpoint['critic_state_dict'])
+        self.critic_target.load_state_dict(checkpoint['critic_state_dict'])
+
+    def save(self, filename):
+        torch.save({
+            'encoder_state_dict': self.encoder.state_dict(),
+            'actor_state_dict': self.actor.state_dict(),
+            'critic_state_dict': self.critic.state_dict(),
+        }, filename)
+
     def act(self, obs, step, eval_mode):
         stddev = utils.schedule(self.stddev_schedule, step)
         for k, ob in obs.items():

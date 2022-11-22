@@ -21,6 +21,7 @@ env:
 demo_dir: ${demo_dir}
 
 # task setting
+action_repeat: 2
 frame_stack: 3
 discount: 0.99
 # train settings
