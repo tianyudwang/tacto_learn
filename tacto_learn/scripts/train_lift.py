@@ -1,6 +1,9 @@
+import datetime
 import os
 import os.path as osp
 import argparse
+import time
+
 from ruamel.yaml import YAML
 
 import robosuite as suite
@@ -108,8 +111,10 @@ def main():
         env_cfg['robots'],
         env_cfg['controller_configs']['default_controller'],
         obs_mode,
+        str(time.time()).split('.')[0]
     ]
     exp_name = '_'.join(exp_name_args)
+    print("experiment name =", exp_name)
 
     if policy_cfg.get("suffix", None):
         exp_name += "_" + policy_cfg["suffix"]
