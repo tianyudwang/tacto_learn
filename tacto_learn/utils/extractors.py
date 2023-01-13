@@ -10,6 +10,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 class CNN(nn.Module):
     def __init__(self, obs_shape, feature_dim, num_layers=2, num_filters=32):
         super().__init__()
+        print("obs shape", obs_shape, "feature dim", feature_dim)
 
         assert len(obs_shape) == 3
         assert obs_shape[0] == 3 or obs_shape[0] == 2, f"Require channel first, obs_shape {obs_shape}"
@@ -27,6 +28,7 @@ class CNN(nn.Module):
         self.convs = nn.Sequential(*layers)
 
         out_shape = self._compute_conv_out_shape()
+        # self.repr_dim = np.prod(out_shape)
         self.fc = nn.Linear(np.prod(out_shape), feature_dim)
 
     def _compute_conv_out_shape(self):
@@ -65,6 +67,27 @@ class Encoder(nn.Module):
         return h
 
 
+class CNN1(nn.Module):
+    def __init__(self, obs_shape):
+
+        # obs_shape = (3, 84, 84)
+
+        self.repr_dim = 32 * 13 * 13
+
+        self.convnet = nn.Sequential(
+            nn.Conv2d(obs_shape[0], 8, kernel_size=3, stride=2),  # resultant shape should be (8, 41, 41)
+            nn.ReLU(),
+            nn.Conv2d(8, 32, kernel_size=3, stride=1),  # (32, 39, 39)
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=3)       # (32, 13, 13)
+        )
+
+    def forward(self, obs):
+        x = self.convnet(obs)
+        x = x.view(x.shape[0], -1)
+        return x
+
+
 class DictExtractor(BaseFeaturesExtractor):
     def __init__(
         self, 
@@ -86,9 +109,11 @@ class DictExtractor(BaseFeaturesExtractor):
         # We need to know size of the output of this extractor,
         # so go over all the spaces and compute output feature sizes
         for key, subspace in observation_space.spaces.items():
+            print("we are processing key", key)
             if "image" in key or "tactile_depth" in key:
                 # extractors[key] = CNN(subspace.shape, image_feature_dim)
-                extractors[key] = Encoder(subspace.shape)
+                extractors[key] = CNN1(subspace.shape)
+                # extractors[key] = Encoder(subspace.shape)
                 total_concat_size += extractors[key].repr_dim
             else:
                 # Run through a simple MLP
